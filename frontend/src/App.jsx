@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from "react";
-import { useWeb3 } from "./lib/useWeb3";
+import { useWeb3, DEV_ACCOUNTS } from "./lib/useWeb3";
 import { CHAIN_NAMES, ROLES, ROLE_LABEL } from "./lib/contracts";
 import { Addr, Badge, Button, Notice } from "./lib/ui";
 
@@ -19,7 +19,7 @@ const TABS = [
 
 export default function App() {
   const web3 = useWeb3();
-  const { account, chainId, deployment, contracts, connect, hasWallet, error } = web3;
+  const { account, chainId, deployment, contracts, connect, hasWallet, error, useDevAccount, devIndex, isLocalChain } = web3;
 
   const [tab, setTab] = useState("identity");
   const [refreshKey, refresh] = useReducer((x) => x + 1, 0);
@@ -67,6 +67,20 @@ export default function App() {
 
         <div className="wallet">
           {chainId && <Badge tone="accent">{CHAIN_NAMES[chainId] ?? `chain ${chainId}`}</Badge>}
+          {isLocalChain && (
+            <select
+              className="input"
+              style={{ width: "auto", padding: "6px 8px" }}
+              value={devIndex}
+              onChange={(e) => useDevAccount(Number(e.target.value))}
+              title="Local demo accounts (Hardhat's public test keys) — no wallet needed"
+            >
+              <option value={-1}>Act as… (demo account)</option>
+              {DEV_ACCOUNTS.map((a, i) => (
+                <option key={i} value={i}>{a.label}</option>
+              ))}
+            </select>
+          )}
           {account ? (
             <>
               <Badge tone={me?.verified ? "ok" : "warn"}>{me?.verified ? "DID active" : "no DID"}</Badge>

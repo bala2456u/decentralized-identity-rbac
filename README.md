@@ -115,9 +115,10 @@ npm run seed:local
 cd frontend && npm install && npm run dev
 ```
 
-Open <http://localhost:5173>. Without a wallet the app runs read-only against the local node. To act, add the Hardhat
-network to MetaMask (RPC `http://127.0.0.1:8545`, chain id `31337`) and import one of the accounts printed by
-`npm run node`. The seed script uses them in this order:
+Open <http://localhost:5173>. **No wallet is needed on the local chain**: the header shows an *Act as…* picker with
+Hardhat's public demo accounts, so you can switch between admin, issuer, alice, bob and a brand-new user with one click.
+(A real wallet such as MetaMask works too — RPC `http://127.0.0.1:8545`, chain id `31337` — and is required on
+testnets, where the picker does not appear.) The seed script uses the accounts in this order:
 
 | # | Account | Identity | Roles | Holds |
 |---|---------|----------|-------|-------|
