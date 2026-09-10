@@ -1,0 +1,479 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "initialAdmin",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "caller",
+        "type": "address"
+      }
+    ],
+    "name": "NotAdmin",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "caller",
+        "type": "address"
+      }
+    ],
+    "name": "NotWriter",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "from",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "to",
+        "type": "uint256"
+      }
+    ],
+    "name": "RangeOutOfBounds",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroAddress",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousAdmin",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "AdminTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "entryId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "action",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "actor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "subject",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "refId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "entryHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "EntryRecorded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "writer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "WriterUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "admin",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "actor",
+        "type": "address"
+      }
+    ],
+    "name": "entriesByActor",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "subject",
+        "type": "address"
+      }
+    ],
+    "name": "entriesBySubject",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "entryId",
+        "type": "uint256"
+      }
+    ],
+    "name": "entryAt",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "timestamp",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "blockNumber",
+            "type": "uint64"
+          },
+          {
+            "internalType": "address",
+            "name": "source",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "actor",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "subject",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "action",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "refId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "dataHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "prevHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "entryHash",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct AuditTrail.Entry",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "from",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "count",
+        "type": "uint256"
+      }
+    ],
+    "name": "getRange",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "timestamp",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "blockNumber",
+            "type": "uint64"
+          },
+          {
+            "internalType": "address",
+            "name": "source",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "actor",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "subject",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "action",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "refId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "dataHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "prevHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "entryHash",
+            "type": "bytes32"
+          }
+        ],
+        "internalType": "struct AuditTrail.Entry[]",
+        "name": "page",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "head",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "action",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "actor",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "subject",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "refId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "dataHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "record",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "entryId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "writer",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "setWriter",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalEntries",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "transferAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "from",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "to",
+        "type": "uint256"
+      }
+    ],
+    "name": "verifyChain",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "ok",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "brokenAt",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "writers",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

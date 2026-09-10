@@ -1,0 +1,30 @@
+# secrets — never commit a real .env
+.env
+.env.*
+!.env.example
+
+# dependencies
+node_modules/
+frontend/node_modules/
+
+# hardhat build output
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
+
+# local deployments (testnet deployments ARE committed)
+deployments/localhost.json
+deployments/hardhat.json
+
+# frontend build
+frontend/dist/
+
+# OS / editor / tooling noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+.claude/

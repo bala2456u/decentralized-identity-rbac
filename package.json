@@ -1,0 +1,26 @@
+{
+  "name": "decentralized-identity-rbac",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Blockchain-based decentralized identity, NFT asset ownership and role-based access control (Challenge 21)",
+  "license": "MIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:amoy": "hardhat run scripts/deploy.js --network amoy",
+    "seed:local": "hardhat run scripts/seed.js --network localhost",
+    "frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2"
+  }
+}
