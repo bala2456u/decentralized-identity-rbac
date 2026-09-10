@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isAddress } from "ethers";
-import { fmtTime, LEVELS, toUnix } from "../lib/contracts";
-import { Addr, Badge, Button, Card, Field, Input, Notice, Select, Table, useTx } from "../lib/ui";
+import { describeError, fmtTime, LEVEL_INFO, LEVELS, toUnix } from "../lib/contracts";
+import { Addr, Badge, Button, Card, Explain, Field, Input, Notice, Select, Table, useTx } from "../lib/ui";
 
 const GRANT_TYPES = {
   AccessGrant: [
@@ -32,7 +32,7 @@ export default function AccessPanel({ web3, refresh }) {
       const level = await contracts.policy.effectiveLevel(BigInt(check.tokenId), check.address);
       setCheck({ ...check, result: Number(level), err: null });
     } catch (e) {
-      setCheck({ ...check, result: null, err: "No such asset." });
+      setCheck({ ...check, result: null, err: describeError(e).friendly });
     }
   };
 
@@ -50,7 +50,7 @@ export default function AccessPanel({ web3, refresh }) {
       );
       setList({ ...list, rows, err: null });
     } catch (e) {
-      setList({ ...list, rows: null, err: "No such asset." });
+      setList({ ...list, rows: null, err: describeError(e).friendly });
     }
   };
 
@@ -70,7 +70,7 @@ export default function AccessPanel({ web3, refresh }) {
       const signature = await signer.signTypedData(domain, GRANT_TYPES, req);
       setSigned(JSON.stringify({ req, signer: account, signature }, null, 2));
     } catch (e) {
-      setSignErr(e.shortMessage || e.message);
+      setSignErr(describeError(e).friendly);
     }
   };
 
@@ -81,44 +81,52 @@ export default function AccessPanel({ web3, refresh }) {
 
   return (
     <div className="grid">
-      <Card title="Grant or revoke access" subtitle="Owner, admin, or a MANAGE holder (for VIEW/EDIT only). Grantee needs an active DID.">
+      <Card title="Share an asset" subtitle="Owners can share what they own. Admins can share anything. Someone with Manage access can pass on View or Edit.">
+        <Explain title="How sharing works">
+          <ul>
+            <li><b>View</b> — can open and read. <b>Edit</b> — can also change. <b>Manage</b> — can also share View/Edit with others.</li>
+            <li>The person you share with must have an active Digital ID.</li>
+            <li>Sharing can have an end date. It can also be taken back at any time.</li>
+            <li>If the asset is sent to a new owner, <b>every share is cancelled automatically</b>. The new owner starts clean.</li>
+          </ul>
+        </Explain>
         <div className="row">
-          <Field label="Token id"><Input type="number" min="1" value={form.tokenId} onChange={f("tokenId")} /></Field>
-          <Field label="Level">
+          <Field label="Asset #"><Input type="number" min="1" value={form.tokenId} onChange={f("tokenId")} /></Field>
+          <Field label="Access level" hint={LEVEL_INFO[Number(form.level)]?.desc}>
             <Select value={form.level} onChange={f("level")}>
-              {LEVELS.slice(1).map((l, i) => <option key={l} value={i + 1}>{l}</option>)}
+              {LEVEL_INFO.slice(1).map((l, i) => <option key={l.label} value={i + 1}>{l.label}</option>)}
             </Select>
           </Field>
         </div>
-        <Field label="Grantee"><Input mono placeholder="0x…" value={form.grantee} onChange={f("grantee")} /></Field>
-        <Field label="Expires (optional)"><Input type="datetime-local" value={form.expiry} onChange={f("expiry")} /></Field>
+        <Field label="Share with"><Input mono placeholder="their address 0x…" value={form.grantee} onChange={f("grantee")} /></Field>
+        <Field label="Until (optional)" hint="Leave empty for no end date."><Input type="datetime-local" value={form.expiry} onChange={f("expiry")} /></Field>
         <div className="actions">
           <Button busy={tx.busy} disabled={!valid}
-            onClick={() => tx.run(`Grant ${LEVELS[form.level]}`, () =>
+            onClick={() => tx.run(`Share ${LEVELS[form.level]} access`, () =>
               contracts.policy.grantAccess(BigInt(form.tokenId), form.grantee, Number(form.level), toUnix(form.expiry)))}>
-            Grant
+            Share
           </Button>
           <Button variant="danger" busy={tx.busy} disabled={!valid}
-            onClick={() => tx.run("Revoke access", () => contracts.policy.revokeAccess(BigInt(form.tokenId), form.grantee))}>
-            Revoke
+            onClick={() => tx.run("Take access back", () => contracts.policy.revokeAccess(BigInt(form.tokenId), form.grantee))}>
+            Take back
           </Button>
-          <Button variant="ghost" busy={tx.busy} disabled={!valid || !signer} onClick={sign} title="Sign an EIP-712 grant that anyone can submit for you">
-            Sign instead (gasless)
+          <Button variant="ghost" busy={tx.busy} disabled={!valid || !signer} onClick={sign} title="Sign the share now; anyone can submit it for you later">
+            Sign now, submit later
           </Button>
         </div>
-        <Notice tone={tx.tone}>{tx.msg}</Notice>
+        <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
         {signErr && <Notice tone="err">{signErr}</Notice>}
         {signed && (
-          <Field label="Signed grant — hand this to anyone; they can submit it below" hint="Contains a nonce and a 1-hour deadline, so it cannot be replayed.">
+          <Field label="Your signed share — give this to anyone; they can submit it below on your behalf" hint="It contains a one-time number and a 1-hour deadline, so it can't be reused.">
             <textarea className="input mono" rows={8} readOnly value={signed} />
           </Field>
         )}
       </Card>
 
-      <Card title="Check access" subtitle="What level does an account effectively hold right now?">
+      <Card title="Check what someone can do" subtitle="Their access right now, after every rule is applied — expiry, ownership changes, suspended IDs.">
         <div className="row">
-          <Field label="Token id"><Input type="number" min="1" value={check.tokenId} onChange={(e) => setCheck({ ...check, tokenId: e.target.value })} /></Field>
-          <Field label="Account"><Input mono placeholder="0x…" value={check.address} onChange={(e) => setCheck({ ...check, address: e.target.value.trim() })} /></Field>
+          <Field label="Asset #"><Input type="number" min="1" value={check.tokenId} onChange={(e) => setCheck({ ...check, tokenId: e.target.value })} /></Field>
+          <Field label="Person"><Input mono placeholder="0x…" value={check.address} onChange={(e) => setCheck({ ...check, address: e.target.value.trim() })} /></Field>
         </div>
         <div className="actions">
           <Button variant="ghost" disabled={!check.tokenId || !isAddress(check.address)} onClick={doCheck}>Check</Button>
@@ -126,39 +134,38 @@ export default function AccessPanel({ web3, refresh }) {
         {check.err && <Notice tone="err">{check.err}</Notice>}
         {check.result !== null && (
           <Notice tone={check.result > 0 ? "ok" : "warn"}>
-            Effective level: <b>{LEVELS[check.result]}</b>
-            {check.result === 3 && " (owner or delegated manager)"}
+            <b>{LEVELS[check.result]}</b>{check.result === 3 ? " — this is the owner, or someone with Manage access" : ""}. {LEVEL_INFO[check.result].desc}
           </Notice>
         )}
 
-        <h4 style={{ margin: "18px 0 8px" }}>All grants on an asset</h4>
+        <h4 style={{ marginTop: 20 }}>Everyone an asset is shared with</h4>
         <div className="row">
-          <Input type="number" min="1" placeholder="token id" value={list.tokenId} onChange={(e) => setList({ ...list, tokenId: e.target.value })} style={{ maxWidth: 160 }} />
+          <Input type="number" min="1" placeholder="asset #" value={list.tokenId} onChange={(e) => setList({ ...list, tokenId: e.target.value })} style={{ maxWidth: 160 }} />
           <Button variant="ghost" disabled={!list.tokenId} onClick={doList}>List</Button>
         </div>
         {list.err && <Notice tone="err">{list.err}</Notice>}
         {list.rows && (
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 12 }}>
             <Table
-              head={["Grantee", "Granted", "Effective", "By", "Expires", "Note"]}
-              empty="No grants were ever made on this asset."
+              head={["Person", "Was given", "Has now", "Shared by", "Until", "Note"]}
+              empty="This asset has never been shared."
               rows={list.rows.map((r) => [
                 <Addr value={r.grantee} />,
                 <Badge>{LEVELS[Number(r.grant.level)]}</Badge>,
                 <Badge tone={r.level > 0 ? "ok" : "err"}>{LEVELS[r.level]}</Badge>,
                 <Addr value={r.grant.grantedBy} />,
-                r.grant.expiresAt > 0n ? fmtTime(r.grant.expiresAt) : "never",
-                r.grant.revoked ? "revoked" : r.level === 0 ? "lapsed (expiry, transfer, or identity)" : "",
+                r.grant.expiresAt > 0n ? fmtTime(r.grant.expiresAt) : "no end date",
+                r.grant.revoked ? "taken back" : r.level === 0 ? "no longer valid (expired, asset changed hands, or ID suspended)" : "",
               ])}
             />
           </div>
         )}
       </Card>
 
-      <Card className="span-2" title="Submit a signed grant" subtitle="Paste the JSON produced by “Sign instead”. The submitter pays gas; the signer's authority is what the contract checks.">
+      <Card className="span-2" title="Submit a share someone signed" subtitle="Paste what “Sign now, submit later” produced. You pay the small network fee; the signer's authority is what gets checked.">
         <textarea className="input mono" rows={6} value={submitJson} onChange={(e) => setSubmitJson(e.target.value)} placeholder='{"req":{…},"signer":"0x…","signature":"0x…"}' />
         <div className="actions">
-          <Button busy={tx.busy} disabled={!submitJson.trim()} onClick={() => tx.run("Submit signed grant", submitSigned)}>Submit</Button>
+          <Button busy={tx.busy} disabled={!submitJson.trim()} onClick={() => tx.run("Submit signed share", submitSigned)}>Submit</Button>
         </div>
       </Card>
     </div>

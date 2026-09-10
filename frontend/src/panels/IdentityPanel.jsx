@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { isAddress } from "ethers";
-import { fmtTime, hashText, ROLE_LABEL, ROLES, toUnix } from "../lib/contracts";
-import { Addr, Badge, Button, Card, Field, Input, KV, Notice, Table, useTx } from "../lib/ui";
+import { describeError, fmtTime, hashText, ROLES, toUnix } from "../lib/contracts";
+import { Addr, Badge, Button, Card, Empty, Explain, Field, Input, KV, Notice, RoleChip, Table, useTx } from "../lib/ui";
 
 export default function IdentityPanel(props) {
   return (
     <div className="grid">
       <MyIdentity {...props} />
       <Lookup {...props} />
-      <Credentials {...props} />
+      <Certificates {...props} />
     </div>
   );
 }
@@ -31,27 +31,39 @@ function MyIdentity({ web3, refresh, refreshKey }) {
 
   if (!account) {
     return (
-      <Card title="My identity">
-        <div className="empty">Connect a wallet to create or manage your DID.</div>
+      <Card title="My Digital ID">
+        <Empty>Pick a person (or sign in with a wallet) to create or manage a Digital ID.</Empty>
       </Card>
     );
   }
 
   if (!identity || !identity.exists) {
     return (
-      <Card title="Create my identity" subtitle="Self-sovereign: only you can register your own DID. Nobody can do it for you.">
-        <Field label="DID document URI" hint="Where the full document lives (IPFS CID, URL). Never put personal data on-chain.">
+      <Card
+        tone="accent"
+        title="Create my Digital ID"
+        subtitle="You create it yourself. Nobody — not even an admin — can create it for you, and it can never be moved to another account."
+      >
+        <Explain>
+          Your Digital ID is derived from your account's address, so it's unique and can't be faked. The details about you
+          (name, department, public key…) live in a document you keep elsewhere; only its <b>fingerprint</b> is stored on
+          the chain. That proves the document hasn't changed without ever exposing what's in it.
+        </Explain>
+        <Field label="Link to your ID document" hint="Where the full document is stored — an IPFS link, for example. Keep personal details off the chain.">
           <Input value={docURI} onChange={(e) => setDocURI(e.target.value)} />
         </Field>
-        <Field label="Document content (hashed client-side)" hint={docText ? `keccak256: ${hashText(docText)}` : "The hash of this text is what gets anchored on-chain."}>
-          <Input value={docText} onChange={(e) => setDocText(e.target.value)} placeholder='{"name":"…","publicKey":"…"}' />
+        <Field
+          label="ID document content"
+          hint={docText ? `Fingerprint that will be recorded: ${hashText(docText)}` : "Only a fingerprint of this text is recorded — never the text itself."}
+        >
+          <Input value={docText} onChange={(e) => setDocText(e.target.value)} placeholder='e.g. {"name":"Dave Kumar","department":"Procurement"}' />
         </Field>
         <div className="actions">
-          <Button busy={tx.busy} disabled={!docText} onClick={() => tx.run("Register DID", () => contracts.did.register(docURI, hashText(docText)))}>
-            Register DID
+          <Button busy={tx.busy} disabled={!docText} onClick={() => tx.run("Create Digital ID", () => contracts.did.register(docURI, hashText(docText)))}>
+            Create my Digital ID
           </Button>
         </div>
-        <Notice tone={tx.tone}>{tx.msg}</Notice>
+        <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
       </Card>
     );
   }
@@ -59,44 +71,48 @@ function MyIdentity({ web3, refresh, refreshKey }) {
   const active = identity.active;
   return (
     <Card
-      title="My identity"
-      right={<Badge tone={active ? "ok" : "err"}>{active ? "active" : identity.adminLocked ? "suspended by admin" : "suspended"}</Badge>}
+      title="My Digital ID"
+      right={<Badge tone={active ? "ok" : "err"}>{active ? "active" : identity.adminLocked ? "suspended by an admin" : "suspended"}</Badge>}
     >
       <KV
         rows={[
-          ["DID", <code>{did}</code>],
-          ["Controller", <Addr value={identity.controller} full />],
+          ["Your ID", <code>{did}</code>],
+          ["Controlled by", <Addr value={identity.controller} full />],
           ["Created", fmtTime(identity.createdAt)],
-          ["Updated", fmtTime(identity.updatedAt)],
-          ["Document", <code>{identity.docURI}</code>],
-          ["Doc hash", <code>{identity.docHash}</code>],
+          ["Last changed", fmtTime(identity.updatedAt)],
+          ["Document link", <code>{identity.docURI}</code>],
+          ["Document fingerprint", <code>{identity.docHash}</code>],
         ]}
       />
       <div className="actions">
         {active ? (
-          <Button variant="danger" size="sm" busy={tx.busy} onClick={() => tx.run("Deactivate identity", () => contracts.did.deactivate(account))}>
-            Deactivate
+          <Button variant="danger" size="sm" busy={tx.busy} onClick={() => tx.run("Suspend my ID", () => contracts.did.deactivate(account))}>
+            Suspend my ID
           </Button>
         ) : (
-          <Button size="sm" busy={tx.busy} onClick={() => tx.run("Reactivate identity", () => contracts.did.reactivate(account))}>
-            Reactivate
+          <Button size="sm" busy={tx.busy} onClick={() => tx.run("Reactivate my ID", () => contracts.did.reactivate(account))}>
+            Reactivate my ID
           </Button>
         )}
+        <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
+          While suspended, all your roles, assets and shares stop working. Reactivating brings them back.
+        </span>
       </div>
 
-      <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "14px 0" }} />
-      <Field label="Rotate controller (key rotation / recovery)" hint="The new key gains the right to edit this DID document. The identity itself never moves.">
+      <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "16px 0" }} />
+
+      <Field label="Lost or compromised key? Move control to a new one" hint="The new key gains the right to manage this ID. Your ID itself stays exactly where it is.">
         <div className="row">
-          <Input mono placeholder="0x…" value={newController} onChange={(e) => setNewController(e.target.value)} />
+          <Input mono placeholder="new key's address 0x…" value={newController} onChange={(e) => setNewController(e.target.value.trim())} />
           <Button size="sm" variant="ghost" busy={tx.busy} disabled={!isAddress(newController)}
-            onClick={() => tx.run("Rotate controller", () => contracts.did.rotateController(account, newController))}>
-            Rotate
+            onClick={() => tx.run("Move control", () => contracts.did.rotateController(account, newController))}>
+            Move control
           </Button>
         </div>
       </Field>
-      <Field label="Update document">
+      <Field label="Update my ID document">
         <div className="row">
-          <Input placeholder="ipfs://new-cid" value={docURI} onChange={(e) => setDocURI(e.target.value)} />
+          <Input placeholder="new document link" value={docURI} onChange={(e) => setDocURI(e.target.value)} />
           <Input placeholder="new document content" value={docText} onChange={(e) => setDocText(e.target.value)} />
           <Button size="sm" variant="ghost" busy={tx.busy} disabled={!docText}
             onClick={() => tx.run("Update document", () => contracts.did.updateDocument(account, hashText(docText), docURI))}>
@@ -104,16 +120,23 @@ function MyIdentity({ web3, refresh, refreshKey }) {
           </Button>
         </div>
       </Field>
-      <Notice tone={tx.tone}>{tx.msg}</Notice>
+      <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
     </Card>
   );
 }
 
-function Lookup({ web3 }) {
+function Lookup({ web3, me, refresh, refreshKey }) {
   const { contracts } = web3;
   const [addr, setAddr] = useState("");
   const [result, setResult] = useState(null);
   const [err, setErr] = useState(null);
+  const tx = useTx(refresh);
+
+  // keep the result fresh after an admin action below
+  useEffect(() => {
+    if (result && isAddress(addr)) lookup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   const lookup = async () => {
     setErr(null);
@@ -124,45 +147,62 @@ function Lookup({ web3 }) {
         contracts.roles.rolesOf(addr),
       ]);
       const held = [];
-      if (roles.isRootAdmin) held.push(ROLE_LABEL[ROLES.DEFAULT_ADMIN]);
-      if (roles.isAdmin) held.push(ROLE_LABEL[ROLES.ADMIN]);
-      if (roles.isIssuer) held.push(ROLE_LABEL[ROLES.ISSUER]);
-      if (roles.isAuditor) held.push(ROLE_LABEL[ROLES.AUDITOR]);
-      if (roles.isUser) held.push(ROLE_LABEL[ROLES.USER]);
+      if (roles.isRootAdmin) held.push(ROLES.DEFAULT_ADMIN);
+      if (roles.isAdmin) held.push(ROLES.ADMIN);
+      if (roles.isIssuer) held.push(ROLES.ISSUER);
+      if (roles.isAuditor) held.push(ROLES.AUDITOR);
+      if (roles.isUser) held.push(ROLES.USER);
       setResult({ identity, did, held });
     } catch (e) {
-      setErr(e.shortMessage || e.message);
+      setErr(describeError(e).friendly);
       setResult(null);
     }
   };
 
   return (
-    <Card title="Verify an identity" subtitle="Anyone can check any address — that is the point of a public registry.">
+    <Card title="Check someone's Digital ID" subtitle="Anyone can check anyone. That openness is what makes an ID trustworthy.">
       <div className="row">
-        <Input mono placeholder="0x…" value={addr} onChange={(e) => setAddr(e.target.value.trim())} />
-        <Button variant="ghost" disabled={!isAddress(addr)} onClick={lookup}>Look up</Button>
+        <Input mono placeholder="their address 0x…" value={addr} onChange={(e) => setAddr(e.target.value.trim())} />
+        <Button variant="ghost" disabled={!isAddress(addr)} onClick={lookup}>Check</Button>
       </div>
       {err && <Notice tone="err">{err}</Notice>}
-      {result && !result.identity.exists && <Notice tone="warn">No identity registered for this address.</Notice>}
+      {result && !result.identity.exists && <Notice tone="warn">This address has no Digital ID. It can't hold roles or assets until it creates one.</Notice>}
       {result && result.identity.exists && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 14 }}>
           <KV
             rows={[
-              ["DID", <code>{result.did}</code>],
+              ["Their ID", <code>{result.did}</code>],
               ["Status", <Badge tone={result.identity.active ? "ok" : "err"}>{result.identity.active ? "active" : "suspended"}</Badge>],
-              ["Roles", result.held.length ? result.held.map((r) => <Badge key={r}>{r}</Badge>) : <span className="empty">none</span>],
-              ["Controller", <Addr value={result.identity.controller} full />],
-              ["Registered", fmtTime(result.identity.createdAt)],
-              ["Document", <code>{result.identity.docURI}</code>],
+              ["Roles", result.held.length ? result.held.map((r) => <RoleChip key={r} role={r} />) : <span className="empty">none</span>],
+              ["Controlled by", <Addr value={result.identity.controller} full />],
+              ["Created", fmtTime(result.identity.createdAt)],
+              ["Document link", <code>{result.identity.docURI}</code>],
             ]}
           />
+          {me?.isAdmin && (
+            <div className="actions">
+              {result.identity.active ? (
+                <Button size="sm" variant="danger" busy={tx.busy} onClick={() => tx.run("Suspend this ID", () => contracts.did.deactivate(addr))}>
+                  Suspend this ID
+                </Button>
+              ) : (
+                <Button size="sm" busy={tx.busy} onClick={() => tx.run("Reactivate this ID", () => contracts.did.reactivate(addr))}>
+                  Reactivate this ID
+                </Button>
+              )}
+              <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
+                Admin action. Suspending stops all their roles, assets and shares at once; only an admin can lift an admin suspension.
+              </span>
+            </div>
+          )}
+          <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
         </div>
       )}
     </Card>
   );
 }
 
-function Credentials({ web3, me, refresh, refreshKey }) {
+function Certificates({ web3, me, refresh, refreshKey }) {
   const { contracts, account } = web3;
   const [mine, setMine] = useState([]);
   const [form, setForm] = useState({ subject: "", schema: "", claim: "", expiry: "" });
@@ -186,63 +226,72 @@ function Credentials({ web3, me, refresh, refreshKey }) {
       const [cred, valid] = await Promise.all([contracts.did.getCredential(verifyId), contracts.did.isCredentialValid(verifyId)]);
       setVerified({ cred, valid });
     } catch (e) {
-      setVerified({ error: e.shortMessage || e.message });
+      setVerified({ error: describeError(e).friendly });
     }
   };
 
   const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   return (
-    <Card className="span-2" title="Verifiable credentials" subtitle="Claims about an identity, signed by an ISSUER and anchored on-chain. Revocable, expirable.">
+    <Card
+      className="span-2"
+      title="Certificates"
+      subtitle="An Issuer can certify a fact about a person — “employee verified”, “passed training”, “KYC complete”. Anyone can check it later. Certificates can expire and can be revoked."
+    >
       <div className="grid">
         <div>
-          <h4 style={{ margin: "0 0 8px" }}>Held by me</h4>
+          <h4>My certificates</h4>
           <Table
-            head={["Schema", "Issuer", "Issued", "Expires", "Status", ""]}
-            empty={account ? "You hold no credentials." : "Connect a wallet."}
+            head={["Certifies", "Issued by", "Issued", "Valid until", "Status", ""]}
+            empty={account ? "Nobody has certified anything about this person yet." : "Pick a person first."}
             rows={mine.map(({ id, cred, valid }) => [
               <code title={cred.schema}>{cred.schema.slice(0, 10)}…</code>,
               <Addr value={cred.issuer} />,
               fmtTime(cred.issuedAt),
-              fmtTime(cred.expiresAt),
-              <Badge tone={valid ? "ok" : "err"}>{valid ? "valid" : cred.revoked ? "revoked" : "invalid"}</Badge>,
+              cred.expiresAt > 0n ? fmtTime(cred.expiresAt) : "no expiry",
+              <Badge tone={valid ? "ok" : "err"}>{valid ? "valid" : cred.revoked ? "revoked" : "not valid"}</Badge>,
               (me?.isAdmin || cred.issuer.toLowerCase() === account?.toLowerCase()) && !cred.revoked ? (
-                <Button size="sm" variant="danger" busy={tx.busy} onClick={() => tx.run("Revoke credential", () => contracts.did.revokeCredential(id))}>revoke</Button>
+                <Button size="sm" variant="danger" busy={tx.busy} onClick={() => tx.run("Revoke certificate", () => contracts.did.revokeCredential(id))}>revoke</Button>
               ) : null,
             ])}
           />
 
-          <h4 style={{ margin: "16px 0 8px" }}>Verify a credential</h4>
+          <h4 style={{ marginTop: 18 }}>Check a certificate</h4>
           <div className="row">
-            <Input mono placeholder="credential id (0x…)" value={verifyId} onChange={(e) => setVerifyId(e.target.value.trim())} />
-            <Button variant="ghost" disabled={!/^0x[0-9a-fA-F]{64}$/.test(verifyId)} onClick={verify}>Verify</Button>
+            <Input mono placeholder="certificate id (0x…)" value={verifyId} onChange={(e) => setVerifyId(e.target.value.trim())} />
+            <Button variant="ghost" disabled={!/^0x[0-9a-fA-F]{64}$/.test(verifyId)} onClick={verify}>Check</Button>
           </div>
           {verified?.error && <Notice tone="err">{verified.error}</Notice>}
-          {verified?.cred && !verified.cred.exists && <Notice tone="warn">No such credential.</Notice>}
+          {verified?.cred && !verified.cred.exists && <Notice tone="warn">No certificate with that ID exists.</Notice>}
           {verified?.cred?.exists && (
             <Notice tone={verified.valid ? "ok" : "err"}>
-              {verified.valid ? "VALID" : "NOT VALID"} — subject <Addr value={verified.cred.subject} /> · issuer <Addr value={verified.cred.issuer} />
-              {verified.cred.revoked && " · revoked"}
+              {verified.valid ? "This certificate is valid." : "This certificate is NOT valid."} About <Addr value={verified.cred.subject} />, issued by{" "}
+              <Addr value={verified.cred.issuer} />{verified.cred.revoked && " — it was revoked"}.
             </Notice>
           )}
         </div>
 
         <div>
-          <h4 style={{ margin: "0 0 8px" }}>Issue a credential {me?.isIssuer ? <Badge tone="ok">you are an ISSUER</Badge> : <Badge tone="warn">requires ISSUER_ROLE</Badge>}</h4>
-          <Field label="Subject address"><Input mono placeholder="0x…" value={form.subject} onChange={f("subject")} /></Field>
+          <h4>
+            Issue a certificate{" "}
+            {me?.isIssuer ? <Badge tone="ok">you are an Issuer</Badge> : <Badge tone="warn">Issuers only</Badge>}
+          </h4>
+          <Field label="Who it's about" hint="They must have an active Digital ID.">
+            <Input mono placeholder="0x…" value={form.subject} onChange={f("subject")} />
+          </Field>
           <div className="row">
-            <Field label="Schema" hint="e.g. KYC_LEVEL_2, EMPLOYEE_VERIFIED"><Input value={form.schema} onChange={f("schema")} /></Field>
-            <Field label="Claim (hashed)" hint="The evidence; only its hash goes on-chain"><Input value={form.claim} onChange={f("claim")} /></Field>
+            <Field label="What it certifies" hint="e.g. EMPLOYEE_VERIFIED"><Input value={form.schema} onChange={f("schema")} /></Field>
+            <Field label="Evidence" hint="e.g. an HR record reference — only its fingerprint is recorded"><Input value={form.claim} onChange={f("claim")} /></Field>
           </div>
-          <Field label="Expires (optional)"><Input type="datetime-local" value={form.expiry} onChange={f("expiry")} /></Field>
+          <Field label="Valid until (optional)"><Input type="datetime-local" value={form.expiry} onChange={f("expiry")} /></Field>
           <div className="actions">
             <Button busy={tx.busy} disabled={!isAddress(form.subject) || !form.schema || !form.claim}
-              onClick={() => tx.run("Issue credential", () =>
+              onClick={() => tx.run("Issue certificate", () =>
                 contracts.did.issueCredential(form.subject, hashText(form.schema), hashText(form.claim), toUnix(form.expiry)))}>
-              Issue
+              Issue certificate
             </Button>
           </div>
-          <Notice tone={tx.tone}>{tx.msg}</Notice>
+          <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
         </div>
       </div>
     </Card>

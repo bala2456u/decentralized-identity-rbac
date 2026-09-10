@@ -1,8 +1,9 @@
 import { useEffect, useReducer, useState } from "react";
 import { useWeb3, DEV_ACCOUNTS } from "./lib/useWeb3";
-import { CHAIN_NAMES, ROLES, ROLE_LABEL } from "./lib/contracts";
-import { Addr, Badge, Button, Notice } from "./lib/ui";
+import { CHAIN_NAMES, ROLES } from "./lib/contracts";
+import { Addr, Badge, Button, Notice, RoleChip } from "./lib/ui";
 
+import HomePanel from "./panels/HomePanel";
 import IdentityPanel from "./panels/IdentityPanel";
 import RolesPanel from "./panels/RolesPanel";
 import AssetsPanel from "./panels/AssetsPanel";
@@ -10,18 +11,21 @@ import AccessPanel from "./panels/AccessPanel";
 import AuditPanel from "./panels/AuditPanel";
 
 const TABS = [
-  ["identity", "Identity"],
+  ["home", "Start here"],
+  ["identity", "My Digital ID"],
   ["roles", "Roles"],
   ["assets", "Assets"],
-  ["access", "Access"],
-  ["audit", "Audit"],
+  ["access", "Sharing"],
+  ["audit", "History"],
 ];
+
+const PANELS = { home: HomePanel, identity: IdentityPanel, roles: RolesPanel, assets: AssetsPanel, access: AccessPanel, audit: AuditPanel };
 
 export default function App() {
   const web3 = useWeb3();
   const { account, chainId, deployment, contracts, connect, hasWallet, error, useDevAccount, devIndex, isLocalChain } = web3;
 
-  const [tab, setTab] = useState("identity");
+  const [tab, setTab] = useState("home");
   const [refreshKey, refresh] = useReducer((x) => x + 1, 0);
   const [me, setMe] = useState(null);
 
@@ -51,8 +55,8 @@ export default function App() {
     };
   }, [contracts, account, refreshKey]);
 
-  const panelProps = { web3, me, refresh, refreshKey };
-  const Panel = { identity: IdentityPanel, roles: RolesPanel, assets: AssetsPanel, access: AccessPanel, audit: AuditPanel }[tab];
+  const Panel = PANELS[tab];
+  const panelProps = { web3, me, refresh, refreshKey, setTab };
 
   return (
     <div className="app">
@@ -61,36 +65,39 @@ export default function App() {
           <div className="brand-mark">ID</div>
           <div>
             <h1>Decentralized Identity &amp; Asset Control</h1>
-            <p>DIDs · NFT ownership · role-based access · tamper-evident audit</p>
+            <p>Digital IDs · who owns what · who can see what · a history nobody can rewrite</p>
           </div>
         </div>
 
         <div className="wallet">
-          {chainId && <Badge tone="accent">{CHAIN_NAMES[chainId] ?? `chain ${chainId}`}</Badge>}
+          {chainId && <Badge tone="accent">{CHAIN_NAMES[chainId] ?? `network ${chainId}`}</Badge>}
+
           {isLocalChain && (
-            <select
-              className="input"
-              style={{ width: "auto", padding: "6px 8px" }}
-              value={devIndex}
-              onChange={(e) => useDevAccount(Number(e.target.value))}
-              title="Local demo accounts (Hardhat's public test keys) — no wallet needed"
-            >
-              <option value={-1}>Act as… (demo account)</option>
-              {DEV_ACCOUNTS.map((a, i) => (
-                <option key={i} value={i}>{a.label}</option>
-              ))}
-            </select>
+            <label className="row" style={{ gap: 6 }}>
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>Try as</span>
+              <select
+                className="input"
+                style={{ width: "auto", padding: "6px 8px" }}
+                value={devIndex}
+                onChange={(e) => useDevAccount(Number(e.target.value))}
+                title="Demo accounts for the local test network — no wallet needed"
+              >
+                <option value={-1}>choose a person…</option>
+                {DEV_ACCOUNTS.map((a, i) => (
+                  <option key={i} value={i}>{a.label}</option>
+                ))}
+              </select>
+            </label>
           )}
+
           {account ? (
-            <>
-              <Badge tone={me?.verified ? "ok" : "warn"}>{me?.verified ? "DID active" : "no DID"}</Badge>
-              {me?.roles.map((r) => (
-                <Badge key={r} tone="muted">{ROLE_LABEL[r]}</Badge>
-              ))}
+            <div className="who">
+              <Badge tone={me?.verified ? "ok" : "warn"}>{me?.verified ? "ID active" : "no ID yet"}</Badge>
+              {me?.roles.map((r) => <RoleChip key={r} role={r} />)}
               <Addr value={account} />
-            </>
+            </div>
           ) : (
-            <Button onClick={connect}>{hasWallet ? "Connect wallet" : "Connect (read-only)"}</Button>
+            <Button onClick={connect}>{hasWallet ? "Sign in with wallet" : "Browse (read-only)"}</Button>
           )}
         </div>
       </header>
@@ -98,32 +105,38 @@ export default function App() {
       {error && <Notice tone="err">{error}</Notice>}
       {chainId && !deployment && (
         <Notice tone="warn">
-          No deployment found for chain {chainId}. Run <code>npm run deploy:local</code> (or switch your wallet to a network
-          listed in <code>frontend/src/deployments.json</code>).
+          The app isn't set up on this network yet. Run <code>npm run deploy:local</code>, or switch your wallet to a
+          network listed in <code>frontend/src/deployments.json</code>.
         </Notice>
       )}
       {!account && contracts && (
-        <Notice tone="info">Read-only mode: you can browse everything but need a connected wallet to send transactions.</Notice>
+        <Notice tone="info">
+          You're browsing. To take an action, {isLocalChain ? "pick a person from “Try as” above" : "sign in with a wallet"}.
+        </Notice>
       )}
 
       <nav className="tabs">
-        {TABS.map(([key, label]) => (
+        {TABS.map(([key, label], i) => (
           <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
+            <span className="num">{i === 0 ? "★" : i}</span>
             {label}
           </button>
         ))}
       </nav>
 
-      <main>{contracts ? <Panel {...panelProps} /> : <div className="empty">Connect to a network with a deployment to begin.</div>}</main>
+      <main>
+        {contracts ? <Panel {...panelProps} /> : <div className="empty">Waiting for a network with the app deployed…</div>}
+      </main>
 
       <footer>
-        Every action shown here is enforced by the smart contracts — the UI only reflects what the chain allows.
+        Every rule you see enforced here is enforced by the smart contracts themselves — this screen only shows what the chain allows.
         {deployment && (
-          <>
-            {" "}Contracts: {Object.entries(deployment.contracts).map(([n, a]) => (
-              <span key={n}> {n} <Addr value={a} /></span>
+          <div>
+            Contracts:{" "}
+            {Object.entries(deployment.contracts).map(([n, a]) => (
+              <span key={n}> {n} <Addr value={a} /> </span>
             ))}
-          </>
+          </div>
         )}
       </footer>
     </div>

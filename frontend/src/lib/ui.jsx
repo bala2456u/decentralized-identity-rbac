@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
-import { explainError, short } from "./contracts";
+import { describeError, ROLE_INFO, short } from "./contracts";
 
-export function Card({ title, subtitle, right, children, className = "" }) {
+export function Card({ title, subtitle, right, children, className = "", tone }) {
   return (
-    <section className={`card ${className}`}>
+    <section className={`card ${tone ? `card-${tone}` : ""} ${className}`}>
       {(title || right) && (
         <div className="card-head">
           <div>
@@ -52,13 +52,42 @@ export function Button({ variant = "primary", size, busy, children, ...rest }) {
   );
 }
 
-export function Badge({ tone = "muted", children }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+export function Badge({ tone = "muted", children, title }) {
+  return (
+    <span className={`badge badge-${tone}`} title={title}>
+      {children}
+    </span>
+  );
 }
 
-export function Notice({ tone = "info", children }) {
+export function RoleChip({ role }) {
+  const info = ROLE_INFO[role];
+  return (
+    <Badge tone="accent" title={info?.desc}>
+      {info?.label ?? short(role)}
+    </Badge>
+  );
+}
+
+/** A status message. `detail` is shown small and muted underneath (used for technical error codes). */
+export function Notice({ tone = "info", children, detail }) {
   if (!children) return null;
-  return <div className={`notice notice-${tone}`}>{children}</div>;
+  return (
+    <div className={`notice notice-${tone}`}>
+      <div>{children}</div>
+      {detail && <div className="notice-detail">{detail}</div>}
+    </div>
+  );
+}
+
+/** Collapsible "What is this?" explainer. */
+export function Explain({ title = "What is this?", children }) {
+  return (
+    <details className="explain">
+      <summary>{title}</summary>
+      <div>{children}</div>
+    </details>
+  );
 }
 
 export function Addr({ value, full }) {
@@ -102,28 +131,35 @@ export function Table({ head, rows, empty = "Nothing here yet." }) {
   );
 }
 
+export function Empty({ children }) {
+  return <div className="empty">{children}</div>;
+}
+
 /**
  * Runs a transaction (or any async action) and tracks its status for the UI.
- * `fn` may return a tx response (awaited to a receipt) or a plain value.
+ * Successes read "<label> — done"; failures are translated into plain English
+ * with the exact contract error kept as a detail line.
  */
 export function useTx(onDone) {
-  const [state, setState] = useState({ busy: false, msg: null, tone: "info" });
+  const [state, setState] = useState({ busy: false, msg: null, detail: null, tone: "info" });
 
   const run = useCallback(
     async (label, fn) => {
-      setState({ busy: true, msg: `${label}…`, tone: "info" });
+      setState({ busy: true, msg: `${label}…`, detail: null, tone: "info" });
       try {
         const result = await fn();
         const receipt = result && typeof result.wait === "function" ? await result.wait() : null;
         setState({
           busy: false,
-          msg: receipt ? `${label} ✓  (block ${receipt.blockNumber}, tx ${short(receipt.hash)})` : `${label} ✓`,
+          msg: `${label} — done.`,
+          detail: receipt ? `Recorded in block ${receipt.blockNumber} · transaction ${short(receipt.hash)}` : null,
           tone: "ok",
         });
         onDone?.(result);
         return result;
       } catch (e) {
-        setState({ busy: false, msg: explainError(e), tone: "err" });
+        const { friendly, technical } = describeError(e);
+        setState({ busy: false, msg: friendly, detail: technical, tone: "err" });
         return undefined;
       }
     },

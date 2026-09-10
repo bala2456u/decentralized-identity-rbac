@@ -1,19 +1,39 @@
 import { useEffect, useState } from "react";
 import { isAddress } from "ethers";
-import { fmtTime, GRANTABLE_ROLES, ROLE_LABEL, ROLES, toUnix } from "../lib/contracts";
-import { Badge, Button, Card, Field, Input, KV, Notice, Select, Table, useTx } from "../lib/ui";
+import { describeError, fmtTime, GRANTABLE_ROLES, ROLE_INFO, ROLES, roleName, toUnix } from "../lib/contracts";
+import { Badge, Button, Card, Empty, Explain, Field, Input, KV, Notice, RoleChip, Select, Table, useTx } from "../lib/ui";
 
-const ALL_ROLES = [["ROOT", ROLES.DEFAULT_ADMIN], ...GRANTABLE_ROLES];
+const ALL_ROLES = [ROLES.DEFAULT_ADMIN, ...GRANTABLE_ROLES];
 
 async function loadRoles(contracts, addr) {
   const r = await contracts.roles.rolesOf(addr);
-  const flags = { ROOT: r.isRootAdmin, ADMIN: r.isAdmin, ISSUER: r.isIssuer, AUDITOR: r.isAuditor, USER: r.isUser };
+  const valid = {
+    [ROLES.DEFAULT_ADMIN]: r.isRootAdmin,
+    [ROLES.ADMIN]: r.isAdmin,
+    [ROLES.ISSUER]: r.isIssuer,
+    [ROLES.AUDITOR]: r.isAuditor,
+    [ROLES.USER]: r.isUser,
+  };
   const rows = [];
-  for (const [label, role] of ALL_ROLES) {
+  for (const role of ALL_ROLES) {
     const [raw, expiry] = await Promise.all([contracts.roles.hasRole(role, addr), contracts.roles.roleExpiry(role, addr)]);
-    if (raw || flags[label]) rows.push({ label, valid: flags[label], raw, expiry });
+    if (raw || valid[role]) rows.push({ role, valid: valid[role], raw, expiry });
   }
   return rows;
+}
+
+function RolesTable({ rows }) {
+  return (
+    <Table
+      head={["Role", "Status", "Valid until"]}
+      empty="No roles."
+      rows={rows.map((r) => [
+        <RoleChip role={r.role} />,
+        <Badge tone={r.valid ? "ok" : "err"}>{r.valid ? "in force" : "held, but not in force"}</Badge>,
+        r.expiry > 0n ? fmtTime(r.expiry) : "no expiry",
+      ])}
+    />
+  );
 }
 
 export default function RolesPanel({ web3, me, refresh, refreshKey }) {
@@ -36,84 +56,74 @@ export default function RolesPanel({ web3, me, refresh, refreshKey }) {
       const [rows, verified] = await Promise.all([loadRoles(contracts, lookupAddr), contracts.did.isVerified(lookupAddr)]);
       setLookup({ rows, verified });
     } catch (e) {
-      setLookupErr(e.shortMessage || e.message);
+      setLookupErr(describeError(e).friendly);
     }
   };
 
   const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const canManage = me?.isAdmin;
-
-  const rolesTable = (rows) => (
-    <Table
-      head={["Role", "Status", "Expires"]}
-      empty="No roles."
-      rows={rows.map((r) => [
-        <Badge tone="accent">{r.label}</Badge>,
-        <Badge tone={r.valid ? "ok" : "err"}>{r.valid ? "valid" : "held but not valid"}</Badge>,
-        r.expiry > 0n ? fmtTime(r.expiry) : "never",
-      ])}
-    />
-  );
 
   return (
     <div className="grid">
-      <Card title="My roles" subtitle="Computed live by RoleManager.hasValidRole: role + not expired + identity active.">
-        {account ? rolesTable(mine) : <div className="empty">Connect a wallet.</div>}
+      <Card title="My roles" subtitle="Roles decide what you're allowed to do. A role only counts while your Digital ID is active and the role hasn't expired.">
+        {account ? <RolesTable rows={mine} /> : <Empty>Pick a person first.</Empty>}
       </Card>
 
       <Card
-        title="Grant / revoke a role"
-        subtitle="ADMIN can manage ISSUER, AUDITOR and USER. Only ROOT can manage ADMIN."
-        right={canManage ? <Badge tone="ok">you are an ADMIN</Badge> : <Badge tone="warn">requires ADMIN_ROLE</Badge>}
+        title="Give or remove a role"
+        subtitle="Admins manage Issuer, Auditor and User. Only the Root admin can make someone an Admin."
+        right={me?.isAdmin ? <Badge tone="ok">you are an Admin</Badge> : <Badge tone="warn">Admins only</Badge>}
       >
-        <Field label="Account" hint="Must already hold an active DID — the contract refuses otherwise.">
+        <Field label="Person's address" hint="They must already have an active Digital ID — otherwise the system refuses.">
           <Input mono placeholder="0x…" value={form.address} onChange={f("address")} />
         </Field>
         <div className="row">
-          <Field label="Role">
+          <Field label="Role" hint={ROLE_INFO[form.role]?.desc}>
             <Select value={form.role} onChange={f("role")}>
-              {GRANTABLE_ROLES.map(([label, role]) => <option key={role} value={role}>{label}</option>)}
+              {GRANTABLE_ROLES.map((role) => <option key={role} value={role}>{roleName(role)}</option>)}
             </Select>
           </Field>
-          <Field label="Expires (optional)"><Input type="datetime-local" value={form.expiry} onChange={f("expiry")} /></Field>
+          <Field label="Valid until (optional)" hint="Leave empty for no expiry."><Input type="datetime-local" value={form.expiry} onChange={f("expiry")} /></Field>
         </div>
         <div className="actions">
           <Button busy={tx.busy} disabled={!isAddress(form.address)}
-            onClick={() => tx.run(`Grant ${ROLE_LABEL[form.role]}`, () =>
+            onClick={() => tx.run(`Give ${roleName(form.role)} role`, () =>
               form.expiry
                 ? contracts.roles.grantRoleWithExpiry(form.role, form.address, toUnix(form.expiry))
                 : contracts.roles.grantRole(form.role, form.address))}>
-            Grant
+            Give role
           </Button>
           <Button variant="danger" busy={tx.busy} disabled={!isAddress(form.address)}
-            onClick={() => tx.run(`Revoke ${ROLE_LABEL[form.role]}`, () => contracts.roles.revokeRole(form.role, form.address))}>
-            Revoke
+            onClick={() => tx.run(`Remove ${roleName(form.role)} role`, () => contracts.roles.revokeRole(form.role, form.address))}>
+            Remove role
           </Button>
         </div>
-        <Notice tone={tx.tone}>{tx.msg}</Notice>
+        <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
       </Card>
 
-      <Card title="Look up roles of any address">
+      <Card title="Check someone's roles">
         <div className="row">
-          <Input mono placeholder="0x…" value={lookupAddr} onChange={(e) => setLookupAddr(e.target.value.trim())} />
-          <Button variant="ghost" disabled={!isAddress(lookupAddr)} onClick={doLookup}>Look up</Button>
+          <Input mono placeholder="their address 0x…" value={lookupAddr} onChange={(e) => setLookupAddr(e.target.value.trim())} />
+          <Button variant="ghost" disabled={!isAddress(lookupAddr)} onClick={doLookup}>Check</Button>
         </div>
         {lookupErr && <Notice tone="err">{lookupErr}</Notice>}
         {lookup && (
-          <div style={{ marginTop: 12 }}>
-            <KV rows={[["Identity", <Badge tone={lookup.verified ? "ok" : "err"}>{lookup.verified ? "active" : "none / suspended"}</Badge>]]} />
-            <div style={{ marginTop: 10 }}>{rolesTable(lookup.rows)}</div>
+          <div style={{ marginTop: 14 }}>
+            <KV rows={[["Digital ID", <Badge tone={lookup.verified ? "ok" : "err"}>{lookup.verified ? "active" : "none, or suspended"}</Badge>]]} />
+            <div style={{ marginTop: 10 }}><RolesTable rows={lookup.rows} /></div>
           </div>
         )}
       </Card>
 
       <Card title="How roles work here">
-        <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7, color: "var(--muted)" }}>
-          <li><b style={{ color: "var(--text)" }}>No identity, no role.</b> Granting to an address without an active DID reverts.</li>
-          <li><b style={{ color: "var(--text)" }}>Suspend an identity, and every role it holds stops working</b> — instantly, with no per-role revocation.</li>
-          <li><b style={{ color: "var(--text)" }}>Roles can expire.</b> An expired role is treated as absent, though the raw grant stays visible for audit.</li>
-          <li><b style={{ color: "var(--text)" }}>Admins are not exempt.</b> An admin whose identity is suspended loses admin powers too.</li>
-          <li>Hierarchy: <Badge>ROOT</Badge> → <Badge>ADMIN</Badge> → <Badge>ISSUER</Badge> <Badge>AUDITOR</Badge> <Badge>USER</Badge></li>
+        <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8, color: "var(--muted)" }}>
+          <li><b style={{ color: "var(--text)" }}>No ID, no role.</b> A role can only be given to someone with an active Digital ID.</li>
+          <li><b style={{ color: "var(--text)" }}>Suspend the ID and every role stops instantly</b> — no need to remove them one by one.</li>
+          <li><b style={{ color: "var(--text)" }}>Roles can expire.</b> An expired role is treated as if it were never there, though it stays visible in the history.</li>
+          <li><b style={{ color: "var(--text)" }}>Admins are not exempt.</b> An admin whose ID is suspended loses admin powers too.</li>
+          <li>
+            Chain of authority: <RoleChip role={ROLES.DEFAULT_ADMIN} /> → <RoleChip role={ROLES.ADMIN} /> →{" "}
+            <RoleChip role={ROLES.ISSUER} /> <RoleChip role={ROLES.AUDITOR} /> <RoleChip role={ROLES.USER} />
+          </li>
         </ul>
       </Card>
     </div>

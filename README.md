@@ -143,21 +143,26 @@ on that network as soon as you switch your wallet to it.
 
 ## Five-minute demo script
 
-A walkthrough that shows the rules being enforced, not just the happy path. Use the seeded accounts.
+Open **Start here** first. It tells the story of Dave, a new employee, and shows live which of his five onboarding
+steps are done for whichever person is selected under *Try as*. Then walk the rules — every refusal shows a
+plain-English reason with the exact contract error underneath:
 
-1. **Identity** — as *alice*, open **Identity**. Her DID, controller and `EMPLOYEE_VERIFIED` credential are shown.
-   Paste any random address into *Verify an identity*: "No identity registered."
-2. **Blocked by design** — as *issuer*, try to mint an asset to that random address → `IdentityNotVerified`.
-   Try minting to *auditor* (has a DID, lacks `USER_ROLE`) → `RecipientLacksUserRole`.
-3. **Ownership follows identity** — as *alice*, transfer asset #1 to *bob*. Open *Look up an asset* → the provenance
-   chain now has two entries and the owner DID has changed. Note bob's VIEW grant and carol's EDIT grant on #1 have
-   **lapsed automatically**: check *Access → All grants on an asset*.
-4. **Suspension is total** — as *admin*, deactivate *bob*'s identity (Identity → Verify → or via the Roles tab).
-   As *bob*, try to transfer #1 anywhere → `IdentityNotVerified(bob)`. Check his roles → "held but not valid".
-   Reactivate; everything comes back.
-5. **Gasless permission** — as *alice*, on asset #2 click *Sign instead*; copy the JSON. As *carol*, paste it into
-   *Submit a signed grant* → the grant applies, paid by carol, authorised by alice. Submit it again → `BadNonce`.
-6. **Audit** — open **Audit**. Every step above is there with actor, subject and reference. Click *Verify whole chain*.
+1. **Onboard Dave** — *Try as → dave*. Start here marks step 1 as "next". **My Digital ID** → create his ID. Switch to
+   *admin*: **Roles** → give dave the User role. Switch to *issuer*: **Assets** → register a contract owned by dave.
+   Back as *dave*, Start here now shows steps 1–3 ticked.
+2. **Blocked by design** — as *issuer*, try to register an asset for a random address → *"has no active Digital ID"*.
+   Try one for *auditor* (has an ID, lacks the User role) → *"not the User role yet … an admin must give it first"*.
+3. **Ownership follows identity** — as *alice*, **Assets** → send asset #1 to *bob*. *Find an asset* #1: the ownership
+   history has a new entry and the owner's ID changed. bob's View and carol's Edit shares on #1 have
+   **lapsed automatically** — see **Sharing → Everyone an asset is shared with**.
+4. **Suspension is total** — as *admin*, **My Digital ID → Check someone's Digital ID** → look up *bob* → *Suspend this
+   ID*. **Roles → Check someone's roles** now says "held, but not in force". As *bob*, try to send #1 anywhere → refused.
+   Reactivate as admin; everything comes back.
+5. **Sign now, submit later** — as *alice*, **Sharing** → asset #2, share with *carol*, click *Sign now, submit later*
+   and copy the JSON. As *carol*, paste it under *Submit a share someone signed* → it applies, paid by carol,
+   authorised by alice. Submit it again → *"already used"*.
+6. **History** — every step above is there with who did it, who it was about and a reference. Click *Verify the whole
+   log*. The refused attempts are absent — they never happened.
 
 ---
 
