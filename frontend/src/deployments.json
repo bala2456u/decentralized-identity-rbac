@@ -3,13 +3,14 @@
     "network": "localhost",
     "chainId": 31337,
     "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-    "deployedAt": "2026-09-10T08:02:05.978Z",
+    "deployedAt": "2026-09-10T09:05:30.364Z",
     "contracts": {
-      "DIDRegistry": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-      "RoleManager": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "AuditTrail": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-      "AssetNFT": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-      "AccessPolicy": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+      "DIDRegistry": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+      "RoleManager": "0x4A679253410272dd5232B3Ff7cF5dbB88f295319",
+      "AuditTrail": "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",
+      "AssetNFT": "0x09635F643e140090A9A8Dcd712eD6285858ceBef",
+      "AccessPolicy": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+      "Onboarding": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933"
     }
   }
 }

@@ -80,6 +80,17 @@
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "caller",
+        "type": "address"
+      }
+    ],
+    "name": "NotOnboarding",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "ZeroAddress",
     "type": "error"
@@ -95,6 +106,19 @@
       }
     ],
     "name": "AuditTrailSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "onboarding",
+        "type": "address"
+      }
+    ],
+    "name": "OnboardingSet",
     "type": "event"
   },
   {
@@ -238,6 +262,19 @@
   },
   {
     "inputs": [],
+    "name": "HOD_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "ISSUER_ROLE",
     "outputs": [
       {
@@ -351,6 +388,24 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "approver",
+        "type": "address"
+      }
+    ],
+    "name": "grantUserRoleFromOnboarding",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes32",
         "name": "role",
         "type": "bytes32"
@@ -391,6 +446,19 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "onboarding",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -488,6 +556,11 @@
       },
       {
         "internalType": "bool",
+        "name": "isHod",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
         "name": "isUser",
         "type": "bool"
       }
@@ -504,6 +577,19 @@
       }
     ],
     "name": "setAuditTrail",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "onboarding_",
+        "type": "address"
+      }
+    ],
+    "name": "setOnboarding",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

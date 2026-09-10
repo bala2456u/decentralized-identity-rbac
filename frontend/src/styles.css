@@ -139,6 +139,19 @@ h4 { margin: 0 0 8px; font-size: 14px; }
 .kv dd { margin: 0; word-break: break-all; }
 .addr { font-family: var(--mono); font-size: 12.5px; cursor: copy; border-bottom: 1px dotted var(--border-2); }
 .addr:hover { color: var(--accent); }
+.addr .person { font-family: inherit; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; font-weight: 500; }
+
+/* onboarding timeline */
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.timeline li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 0 0 18px; position: relative; }
+.timeline li::before { content: ""; position: absolute; left: 13px; top: 28px; bottom: 0; width: 2px; background: var(--border); }
+.timeline li:last-child::before { display: none; }
+.timeline .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--panel-2); border: 2px solid var(--border-2); color: var(--muted); }
+.timeline .done .dot { background: rgba(61,220,151,.15); border-color: var(--ok); color: var(--ok); }
+.timeline .current .dot { background: rgba(107,155,255,.15); border-color: var(--accent); color: var(--accent); }
+.timeline .rejected .dot { background: rgba(255,123,123,.15); border-color: var(--err); color: var(--err); }
+.timeline b { display: block; }
+.timeline .meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }

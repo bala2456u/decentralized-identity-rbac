@@ -17,6 +17,13 @@ library AuditActions {
     bytes32 internal constant ROLE_GRANTED = keccak256("ROLE_GRANTED");
     bytes32 internal constant ROLE_REVOKED = keccak256("ROLE_REVOKED");
 
+    bytes32 internal constant ONBOARDING_SUBMITTED    = keccak256("ONBOARDING_SUBMITTED");
+    bytes32 internal constant ONBOARDING_HOD_APPROVED = keccak256("ONBOARDING_HOD_APPROVED");
+    bytes32 internal constant ONBOARDING_APPROVED     = keccak256("ONBOARDING_APPROVED");
+    bytes32 internal constant ONBOARDING_REJECTED     = keccak256("ONBOARDING_REJECTED");
+    bytes32 internal constant PROFILE_SET_BY_ADMIN    = keccak256("PROFILE_SET_BY_ADMIN");
+    bytes32 internal constant DEPARTMENT_HEAD_SET     = keccak256("DEPARTMENT_HEAD_SET");
+
     bytes32 internal constant ASSET_MINTED       = keccak256("ASSET_MINTED");
     bytes32 internal constant ASSET_TRANSFERRED  = keccak256("ASSET_TRANSFERRED");
     bytes32 internal constant ASSET_FROZEN       = keccak256("ASSET_FROZEN");

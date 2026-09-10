@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { describeError, ROLE_INFO, short } from "./contracts";
+import { useNames } from "./names";
 
 export function Card({ title, subtitle, right, children, className = "", tone }) {
   return (
@@ -90,12 +91,20 @@ export function Explain({ title = "What is this?", children }) {
   );
 }
 
+/**
+ * An address, shown as the person's name and Staff ID whenever the Onboarding
+ * contract knows them, otherwise shortened. Hover for the raw address; click to copy.
+ */
 export function Addr({ value, full }) {
+  const { resolve } = useNames();
   if (!value) return <span className="mono">—</span>;
+  const label = resolve(value);
   const copy = () => navigator.clipboard?.writeText(value).catch(() => {});
   return (
     <span className="addr" title={`${value} (click to copy)`} onClick={copy}>
-      {full ? value : short(value)}
+      {label ? <span className="person">{label}</span> : null}
+      {label && full ? " " : null}
+      {full ? <span className="mono">{value}</span> : label ? null : short(value)}
     </span>
   );
 }

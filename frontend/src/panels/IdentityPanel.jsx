@@ -151,6 +151,7 @@ function Lookup({ web3, me, refresh, refreshKey }) {
       if (roles.isAdmin) held.push(ROLES.ADMIN);
       if (roles.isIssuer) held.push(ROLES.ISSUER);
       if (roles.isAuditor) held.push(ROLES.AUDITOR);
+      if (roles.isHod) held.push(ROLES.HOD);
       if (roles.isUser) held.push(ROLES.USER);
       setResult({ identity, did, held });
     } catch (e) {

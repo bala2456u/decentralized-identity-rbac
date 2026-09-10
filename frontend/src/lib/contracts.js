@@ -6,8 +6,9 @@ import RoleManager from "../abi/RoleManager.json";
 import AuditTrail from "../abi/AuditTrail.json";
 import AssetNFT from "../abi/AssetNFT.json";
 import AccessPolicy from "../abi/AccessPolicy.json";
+import Onboarding from "../abi/Onboarding.json";
 
-export const ABIS = { DIDRegistry, RoleManager, AuditTrail, AssetNFT, AccessPolicy };
+export const ABIS = { DIDRegistry, RoleManager, AuditTrail, AssetNFT, AccessPolicy, Onboarding };
 
 // ---------------------------------------------------------------------------
 // Roles
@@ -18,21 +19,23 @@ export const ROLES = {
   ADMIN: id("ADMIN_ROLE"),
   ISSUER: id("ISSUER_ROLE"),
   AUDITOR: id("AUDITOR_ROLE"),
+  HOD: id("HOD_ROLE"),
   USER: id("USER_ROLE"),
 };
 
 /** Plain-English names and one-line explanations for every role. */
 export const ROLE_INFO = {
   [ROLES.DEFAULT_ADMIN]: { label: "Root admin", desc: "Appoints and removes admins. The master key." },
-  [ROLES.ADMIN]: { label: "Admin", desc: "Gives and removes roles, can suspend an ID and freeze an asset." },
+  [ROLES.ADMIN]: { label: "Admin", desc: "Gives and removes roles, gives final onboarding approval, can suspend an ID and freeze an asset." },
   [ROLES.ISSUER]: { label: "Issuer", desc: "Registers new assets and issues certificates about people." },
   [ROLES.AUDITOR]: { label: "Auditor", desc: "Oversight only. Can look at everything, cannot own assets." },
-  [ROLES.USER]: { label: "User", desc: "Can own, receive and share assets." },
+  [ROLES.HOD]: { label: "Head of Dept", desc: "Gives the first approval to onboarding requests from their own department." },
+  [ROLES.USER]: { label: "User", desc: "Can own, receive and share assets. Granted automatically when onboarding is approved." },
 };
 
 export const roleName = (role) => ROLE_INFO[role]?.label ?? short(role);
 
-export const GRANTABLE_ROLES = [ROLES.ADMIN, ROLES.ISSUER, ROLES.AUDITOR, ROLES.USER];
+export const GRANTABLE_ROLES = [ROLES.ADMIN, ROLES.ISSUER, ROLES.AUDITOR, ROLES.HOD, ROLES.USER];
 
 // ---------------------------------------------------------------------------
 // Access levels
@@ -45,6 +48,14 @@ export const LEVEL_INFO = [
   { label: "Manage", desc: "Can read, change, and share View or Edit access with others." },
 ];
 export const LEVELS = LEVEL_INFO.map((l) => l.label);
+
+// ---------------------------------------------------------------------------
+// Onboarding
+// ---------------------------------------------------------------------------
+
+export const STATUS = { NONE: 0, PENDING_HOD: 1, PENDING_ADMIN: 2, APPROVED: 3, REJECTED: 4 };
+export const STATUS_LABEL = ["Not submitted", "Waiting for Head of Department", "Waiting for admin", "Approved", "Rejected"];
+export const DEPARTMENTS = ["Procurement", "Finance", "Administration", "Records Office", "Internal Audit", "Engineering", "HR"];
 
 // ---------------------------------------------------------------------------
 // History actions
@@ -60,6 +71,12 @@ const ACTIONS = {
   CREDENTIAL_REVOKED: "Certificate revoked",
   ROLE_GRANTED: "Role given",
   ROLE_REVOKED: "Role removed",
+  ONBOARDING_SUBMITTED: "Onboarding submitted",
+  ONBOARDING_HOD_APPROVED: "Approved by Head of Dept",
+  ONBOARDING_APPROVED: "Onboarding approved",
+  ONBOARDING_REJECTED: "Onboarding rejected",
+  PROFILE_SET_BY_ADMIN: "Staff profile set by admin",
+  DEPARTMENT_HEAD_SET: "Department head appointed",
   ASSET_MINTED: "Asset registered",
   ASSET_TRANSFERRED: "Asset transferred",
   ASSET_FROZEN: "Asset frozen",
@@ -93,6 +110,7 @@ export function makeContracts(runner, deployment) {
     audit: new Contract(c.AuditTrail, AuditTrail, runner),
     nft: new Contract(c.AssetNFT, AssetNFT, runner),
     policy: new Contract(c.AccessPolicy, AccessPolicy, runner),
+    onboarding: c.Onboarding ? new Contract(c.Onboarding, Onboarding, runner) : null,
   };
 }
 
@@ -139,7 +157,7 @@ const FRIENDLY = {
   CallerLacksRole: ([role]) => `You need the ${roleName(role)} role to do this.`,
   AccessControlUnauthorizedAccount: ([, role]) => `You need the ${roleName(role)} role to do this.`,
   RecipientLacksUserRole: ([a]) =>
-    `${short(a)} has a Digital ID but not the User role yet, so they can't hold assets. An admin must give them the User role first.`,
+    `${short(a)} has a Digital ID but not the User role yet, so they can't hold assets. They need to complete onboarding (or an admin must give them the User role).`,
   AssetFrozen: ([tokenId]) => `Asset #${tokenId} is frozen by an admin and cannot be moved right now.`,
   DuplicateContent: ([, tokenId]) =>
     `This exact content already exists as asset #${tokenId}. The same thing cannot be registered twice.`,
@@ -160,6 +178,17 @@ const FRIENDLY = {
   RangeOutOfBounds: () => "That range is outside the history log.",
   AlreadySet: () => "This was already configured and cannot be changed again.",
   ZeroAddress: () => "That address is empty.",
+  // Onboarding
+  RequestExists: ([, status]) => `There is already an onboarding request for this person (${STATUS_LABEL[Number(status)]}).`,
+  WrongStage: ([, expected, actual]) =>
+    `This request is not at that stage. It is currently: ${STATUS_LABEL[Number(actual)]} (this action needs: ${STATUS_LABEL[Number(expected)]}).`,
+  StaffIdTaken: ([staffId, owner]) => `Staff ID ${staffId} already belongs to ${short(owner)}. Each Staff ID can be used once.`,
+  EmptyField: ([field]) => `Please fill in the ${field === "staffId" ? "Staff ID" : field}.`,
+  NotDepartmentHead: ([, dept]) => `Only the Head of the ${dept} department can approve this request.`,
+  SelfApproval: () => "You can't approve your own onboarding request.",
+  NotAuthorizedToReject: () => "Only the department head (at stage one) or an admin can reject this request.",
+  NotHOD: ([a]) => `${short(a)} doesn't hold the Head of Department role, so they can't head a department.`,
+  NotOnboarding: () => "Only the Onboarding contract can grant the User role this way.",
 };
 
 function findRevertData(err) {

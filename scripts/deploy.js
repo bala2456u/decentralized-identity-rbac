@@ -15,7 +15,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { ethers, network, artifacts } = require("hardhat");
 
-const CONTRACTS = ["DIDRegistry", "RoleManager", "AuditTrail", "AssetNFT", "AccessPolicy"];
+const CONTRACTS = ["DIDRegistry", "RoleManager", "AuditTrail", "AssetNFT", "AccessPolicy", "Onboarding"];
 
 async function send(label, promise) {
   const tx = await promise;
@@ -64,11 +64,21 @@ async function main() {
     await nft.getAddress()
   );
   await policy.waitForDeployment();
-  console.log(`  AccessPolicy  ${await policy.getAddress()}\n`);
+  console.log(`  AccessPolicy  ${await policy.getAddress()}`);
+
+  const onboarding = await (await ethers.getContractFactory("Onboarding")).deploy(
+    await did.getAddress(),
+    await roles.getAddress()
+  );
+  await onboarding.waitForDeployment();
+  console.log(`  Onboarding    ${await onboarding.getAddress()}\n`);
 
   console.log("Wiring…");
   await send("DIDRegistry.setRoleManager", did.setRoleManager(await roles.getAddress()));
-  for (const [name, c] of [["DIDRegistry", did], ["RoleManager", roles], ["AssetNFT", nft], ["AccessPolicy", policy]]) {
+  await send("RoleManager.setOnboarding", roles.setOnboarding(await onboarding.getAddress()));
+  for (const [name, c] of [
+    ["DIDRegistry", did], ["RoleManager", roles], ["AssetNFT", nft], ["AccessPolicy", policy], ["Onboarding", onboarding],
+  ]) {
     await send(`AuditTrail.setWriter(${name})`, audit.setWriter(await c.getAddress(), true));
     await send(`${name}.setAuditTrail`, c.setAuditTrail(await audit.getAddress()));
   }
@@ -84,6 +94,7 @@ async function main() {
       AuditTrail: await audit.getAddress(),
       AssetNFT: await nft.getAddress(),
       AccessPolicy: await policy.getAddress(),
+      Onboarding: await onboarding.getAddress(),
     },
   };
 

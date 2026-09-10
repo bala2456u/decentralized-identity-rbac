@@ -5,10 +5,14 @@ const ROLES = {
   ADMIN: ethers.id("ADMIN_ROLE"),
   ISSUER: ethers.id("ISSUER_ROLE"),
   AUDITOR: ethers.id("AUDITOR_ROLE"),
+  HOD: ethers.id("HOD_ROLE"),
   USER: ethers.id("USER_ROLE"),
 };
 
 const LEVEL = { NONE: 0, VIEW: 1, EDIT: 2, MANAGE: 3 };
+
+/** Onboarding.Status */
+const STATUS = { NONE: 0, PENDING_HOD: 1, PENDING_ADMIN: 2, APPROVED: 3, REJECTED: 4 };
 
 const ACTIONS = Object.fromEntries(
   [
@@ -21,6 +25,12 @@ const ACTIONS = Object.fromEntries(
     "CREDENTIAL_REVOKED",
     "ROLE_GRANTED",
     "ROLE_REVOKED",
+    "ONBOARDING_SUBMITTED",
+    "ONBOARDING_HOD_APPROVED",
+    "ONBOARDING_APPROVED",
+    "ONBOARDING_REJECTED",
+    "PROFILE_SET_BY_ADMIN",
+    "DEPARTMENT_HEAD_SET",
     "ASSET_MINTED",
     "ASSET_TRANSFERRED",
     "ASSET_FROZEN",
@@ -42,11 +52,13 @@ async function registerDID(did, signer, label = "doc") {
  *   admin    – deployer, DEFAULT_ADMIN + ADMIN
  *   issuer   – ISSUER_ROLE
  *   auditor  – AUDITOR_ROLE (has a DID but NOT USER_ROLE, so cannot hold assets)
- *   alice/bob/carol – USER_ROLE
+ *   alice/bob/carol – USER_ROLE (granted directly by the admin)
  *   mallory  – no DID at all; the adversary in every negative test
+ *   hod      – HOD_ROLE, head of the "Procurement" department
+ *   dave     – has a DID, no roles, no onboarding request yet
  */
 async function deploySystem() {
-  const [admin, issuer, auditor, alice, bob, carol, mallory] = await ethers.getSigners();
+  const [admin, issuer, auditor, alice, bob, carol, mallory, hod, dave] = await ethers.getSigners();
 
   const did = await (await ethers.getContractFactory("DIDRegistry")).deploy(admin.address);
 
@@ -64,16 +76,21 @@ async function deploySystem() {
     await roles.getAddress(),
     await nft.getAddress()
   );
+  const onboarding = await (await ethers.getContractFactory("Onboarding")).deploy(
+    await did.getAddress(),
+    await roles.getAddress()
+  );
 
   // Wiring
   await did.setRoleManager(await roles.getAddress());
-  for (const c of [did, roles, nft, policy]) {
+  await roles.setOnboarding(await onboarding.getAddress());
+  for (const c of [did, roles, nft, policy, onboarding]) {
     await audit.setWriter(await c.getAddress(), true);
     await c.setAuditTrail(await audit.getAddress());
   }
 
   // Cast identities (mallory deliberately left out)
-  for (const s of [issuer, auditor, alice, bob, carol]) {
+  for (const s of [issuer, auditor, alice, bob, carol, hod, dave]) {
     await registerDID(did, s);
   }
 
@@ -83,8 +100,10 @@ async function deploySystem() {
   for (const s of [alice, bob, carol]) {
     await roles.grantRole(ROLES.USER, s.address);
   }
+  await roles.grantRole(ROLES.HOD, hod.address);
+  await onboarding.setDepartmentHead("Procurement", hod.address);
 
-  return { did, roles, audit, nft, policy, admin, issuer, auditor, alice, bob, carol, mallory };
+  return { did, roles, audit, nft, policy, onboarding, admin, issuer, auditor, alice, bob, carol, mallory, hod, dave };
 }
 
 /** Mint one asset to `to` from the issuer; returns the tokenId. */
@@ -155,6 +174,7 @@ async function signGrant(policy, signer, { tokenId, grantee, level, expiresAt = 
 module.exports = {
   ROLES,
   LEVEL,
+  STATUS,
   ACTIONS,
   deploySystem,
   registerDID,

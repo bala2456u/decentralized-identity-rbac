@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ROLES, ROLE_INFO } from "../lib/contracts";
+import { ROLES, ROLE_INFO, STATUS } from "../lib/contracts";
 import { DEV_ACCOUNTS } from "../lib/useWeb3";
 import { Badge, Button, Card, RoleChip } from "../lib/ui";
 
@@ -11,6 +11,7 @@ const DEMO_ROLES = [
   [ROLES.USER],
   [ROLES.USER],
   [],
+  [ROLES.HOD],
 ];
 
 export default function HomePanel({ web3, me, setTab, refreshKey }) {
@@ -24,22 +25,24 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
       return undefined;
     }
     (async () => {
-      const [assetIds, history] = await Promise.all([
+      const [assetIds, history, status] = await Promise.all([
         contracts.nft.assetsOf(account),
         contracts.audit.entriesByActor(account),
+        contracts.onboarding ? contracts.onboarding.statusOf(account) : Promise.resolve(0n),
       ]);
       let shared = 0;
       for (const id of assetIds) {
         const [active] = await contracts.policy.activeGranteesOf(id);
         shared += active.length;
       }
-      if (!cancelled) setStats({ assets: assetIds.length, shared, history: history.length });
+      if (!cancelled) setStats({ assets: assetIds.length, shared, history: history.length, status: Number(status) });
     })().catch(() => !cancelled && setStats(null));
     return () => {
       cancelled = true;
     };
   }, [contracts, account, refreshKey]);
 
+  const st = stats?.status ?? STATUS.NONE;
   const hasUser = Boolean(me?.roles.includes(ROLES.USER));
   const steps = [
     {
@@ -51,17 +54,33 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
       cta: "Create my ID",
     },
     {
-      title: "Get the User role from an admin",
+      title: "Submit your details for onboarding",
+      who: "you do this",
+      why: "Your Staff ID, name and department. From now on everyone sees “Dave Kumar · STAFF-1042”, never a hash. The rest of your form is only fingerprinted.",
+      done: st === STATUS.PENDING_HOD || st === STATUS.PENDING_ADMIN || st === STATUS.APPROVED,
+      tab: "onboarding",
+      cta: "Apply",
+    },
+    {
+      title: "Your Head of Department approves",
+      who: "the department head does this",
+      why: "Only the head of your department can do this, and they can't approve their own request. An admin can't jump ahead of them — the contract refuses.",
+      done: st === STATUS.PENDING_ADMIN || st === STATUS.APPROVED,
+      tab: "onboarding",
+      cta: "See status",
+    },
+    {
+      title: "An admin gives final approval",
       who: "an admin does this",
-      why: "Roles decide what you're allowed to do. Without the User role you can't own or receive anything — the system refuses, it doesn't just hide a button.",
-      done: hasUser,
-      tab: "roles",
-      cta: "See roles",
+      why: "The moment they approve, the contract itself grants you the User role. No separate step, no chance to forget.",
+      done: st === STATUS.APPROVED || hasUser,
+      tab: "onboarding",
+      cta: "See status",
     },
     {
       title: "Receive your first asset",
       who: "an issuer does this",
-      why: "A contract, a design, a licence — each becomes a unique token with a permanent record of who has held it.",
+      why: "A contract, a design, a licence — each becomes a unique token with a permanent record of who has held it. Only onboarded people can hold one.",
       done: Boolean(stats && stats.assets > 0),
       tab: "assets",
       cta: "See assets",
@@ -85,24 +104,34 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
   ];
   const nextIndex = steps.findIndex((s) => !s.done);
 
+  const tryAs = (index, label) => (
+    <Button size="sm" variant={devIndex === index ? "primary" : "ghost"} onClick={() => useDevAccount(index)}>{label}</Button>
+  );
+
   return (
     <div className="stack">
       <section className="hero">
-        <h2>Identity, ownership and access — without trusting a single admin</h2>
+        <h2>Identity, onboarding, ownership and access — without trusting a single admin</h2>
         <p>
           Organisations juggle people, permissions and digital assets across many systems, and one compromised admin can
-          quietly rewrite who owns what. Here, the rules live in code that no single person controls.
+          quietly rewrite who owns what. Here, the rules live in code that no single person controls — including the
+          order in which a new person gets approved.
         </p>
         <div className="ideas">
           <div className="idea">
             <div className="icon">🪪</div>
             <b>Everyone gets a Digital ID they control</b>
-            <span>Like a passport you issue to yourself. The organisation can suspend it, but never forge it or take it over.</span>
+            <span>Like a passport you issue to yourself, with a readable Staff ID attached. The organisation can suspend it, never forge it.</span>
+          </div>
+          <div className="idea">
+            <div className="icon">✅</div>
+            <b>Onboarding is approved in order, by contract</b>
+            <span>Staff submit → Head of Department approves → Admin approves. Stages can't be skipped, and nobody approves themselves.</span>
           </div>
           <div className="idea">
             <div className="icon">📦</div>
             <b>Assets are tokens tied to IDs</b>
-            <span>A document or licence can only be held by someone with a valid ID and the right role. Transfers to anyone else simply fail.</span>
+            <span>A document or licence can only be held by someone who has been onboarded. Transfers to anyone else simply fail.</span>
           </div>
           <div className="idea">
             <div className="icon">🔗</div>
@@ -117,14 +146,14 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
           className="span-2"
           tone="accent"
           title="Example: Dave's first day"
-          subtitle="Follow one new employee from “no account” to “owns and shares a document”. The system won't let anyone skip a step."
+          subtitle="Follow one new employee from “no account” to “owns and shares a document”. The system won't let anyone skip a step or approve out of turn."
         >
           <div className="story" style={{ marginBottom: 16 }}>
             <div className="avatar">🧑‍💼</div>
             <div>
               <b>Dave joined Procurement this morning.</b>
               <p style={{ margin: "4px 0 0", color: "var(--muted)" }}>
-                By Friday he needs the supplier contract in his name and his manager needs to be able to read it. Five
+                By Friday he needs the supplier contract in his name and his manager needs to be able to read it. Seven
                 things have to happen, in order. {account ? "The ticks below show where the currently selected person is." : "Pick a person above to see live progress."}
               </p>
             </div>
@@ -152,10 +181,13 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
           {isLocalChain && (
             <div className="actions" style={{ marginTop: 16 }}>
               <span style={{ color: "var(--muted)", fontSize: 13 }}>Try it now:</span>
-              <Button size="sm" variant={devIndex === 6 ? "primary" : "ghost"} onClick={() => useDevAccount(6)}>Act as Dave</Button>
-              <Button size="sm" variant={devIndex === 0 ? "primary" : "ghost"} onClick={() => useDevAccount(0)}>Act as the admin</Button>
-              <Button size="sm" variant={devIndex === 1 ? "primary" : "ghost"} onClick={() => useDevAccount(1)}>Act as the issuer</Button>
-              <span style={{ color: "var(--muted)", fontSize: 12.5 }}>Step 1 is Dave's, step 2 the admin's, step 3 the issuer's, then Dave again.</span>
+              {tryAs(6, "Act as Dave")}
+              {tryAs(7, "Act as the Head of Dept")}
+              {tryAs(0, "Act as the admin")}
+              {tryAs(1, "Act as the issuer")}
+              <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
+                Steps 1–2 are Dave's, 3 the department head's, 4 the admin's, 5 the issuer's, then Dave again.
+              </span>
             </div>
           )}
         </Card>
@@ -179,7 +211,7 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
                   <Button size="sm" variant={devIndex === i ? "primary" : "ghost"} onClick={() => useDevAccount(i)}>
                     {a.label.split("—")[0].trim()}
                   </Button>
-                  <span>{DEMO_ROLES[i].length ? DEMO_ROLES[i].map((r) => ROLE_INFO[r].label).join(" + ") : "no ID yet — start from step 1"}</span>
+                  <span>{DEMO_ROLES[i]?.length ? DEMO_ROLES[i].map((r) => ROLE_INFO[r].label).join(" + ") : "no ID yet — start from step 1"}</span>
                 </div>
               ))}
             </div>
@@ -187,8 +219,8 @@ export default function HomePanel({ web3, me, setTab, refreshKey }) {
         ) : (
           <Card title="Getting started on this network">
             <p style={{ margin: 0, color: "var(--muted)" }}>
-              Sign in with your wallet, then start at step 1. An admin of this deployment will need to give you the User role
-              before you can hold assets.
+              Sign in with your wallet, then start at step 1. Your department head and an admin of this deployment will
+              need to approve your onboarding before you can hold assets.
             </p>
           </Card>
         )}

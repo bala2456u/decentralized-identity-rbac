@@ -12,6 +12,7 @@ async function loadRoles(contracts, addr) {
     [ROLES.ADMIN]: r.isAdmin,
     [ROLES.ISSUER]: r.isIssuer,
     [ROLES.AUDITOR]: r.isAuditor,
+    [ROLES.HOD]: r.isHod,
     [ROLES.USER]: r.isUser,
   };
   const rows = [];
@@ -120,9 +121,10 @@ export default function RolesPanel({ web3, me, refresh, refreshKey }) {
           <li><b style={{ color: "var(--text)" }}>Suspend the ID and every role stops instantly</b> — no need to remove them one by one.</li>
           <li><b style={{ color: "var(--text)" }}>Roles can expire.</b> An expired role is treated as if it were never there, though it stays visible in the history.</li>
           <li><b style={{ color: "var(--text)" }}>Admins are not exempt.</b> An admin whose ID is suspended loses admin powers too.</li>
+          <li><b style={{ color: "var(--text)" }}>The User role normally comes from onboarding</b> — granted by the contract itself once the department head and an admin have both approved. Admins can still give it directly here for exceptional cases; the history shows which path was used.</li>
           <li>
             Chain of authority: <RoleChip role={ROLES.DEFAULT_ADMIN} /> → <RoleChip role={ROLES.ADMIN} /> →{" "}
-            <RoleChip role={ROLES.ISSUER} /> <RoleChip role={ROLES.AUDITOR} /> <RoleChip role={ROLES.USER} />
+            <RoleChip role={ROLES.ISSUER} /> <RoleChip role={ROLES.AUDITOR} /> <RoleChip role={ROLES.HOD} /> <RoleChip role={ROLES.USER} />
           </li>
         </ul>
       </Card>

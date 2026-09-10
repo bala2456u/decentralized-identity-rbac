@@ -1,10 +1,12 @@
 import { useEffect, useReducer, useState } from "react";
 import { useWeb3, DEV_ACCOUNTS } from "./lib/useWeb3";
 import { CHAIN_NAMES, ROLES } from "./lib/contracts";
+import { NamesProvider } from "./lib/names";
 import { Addr, Badge, Button, Notice, RoleChip } from "./lib/ui";
 
 import HomePanel from "./panels/HomePanel";
 import IdentityPanel from "./panels/IdentityPanel";
+import OnboardingPanel from "./panels/OnboardingPanel";
 import RolesPanel from "./panels/RolesPanel";
 import AssetsPanel from "./panels/AssetsPanel";
 import AccessPanel from "./panels/AccessPanel";
@@ -13,13 +15,22 @@ import AuditPanel from "./panels/AuditPanel";
 const TABS = [
   ["home", "Start here"],
   ["identity", "My Digital ID"],
+  ["onboarding", "Onboarding"],
   ["roles", "Roles"],
   ["assets", "Assets"],
   ["access", "Sharing"],
   ["audit", "History"],
 ];
 
-const PANELS = { home: HomePanel, identity: IdentityPanel, roles: RolesPanel, assets: AssetsPanel, access: AccessPanel, audit: AuditPanel };
+const PANELS = {
+  home: HomePanel,
+  identity: IdentityPanel,
+  onboarding: OnboardingPanel,
+  roles: RolesPanel,
+  assets: AssetsPanel,
+  access: AccessPanel,
+  audit: AuditPanel,
+};
 
 export default function App() {
   const web3 = useWeb3();
@@ -47,8 +58,11 @@ export default function App() {
       if (r.isAdmin) roles.push(ROLES.ADMIN);
       if (r.isIssuer) roles.push(ROLES.ISSUER);
       if (r.isAuditor) roles.push(ROLES.AUDITOR);
+      if (r.isHod) roles.push(ROLES.HOD);
       if (r.isUser) roles.push(ROLES.USER);
-      if (!cancelled) setMe({ verified, did, roles, isAdmin: r.isAdmin || r.isRootAdmin, isIssuer: r.isIssuer });
+      if (!cancelled) {
+        setMe({ verified, did, roles, isAdmin: r.isAdmin || r.isRootAdmin, isIssuer: r.isIssuer, isHod: r.isHod, isUser: r.isUser });
+      }
     })().catch(() => !cancelled && setMe(null));
     return () => {
       cancelled = true;
@@ -59,86 +73,93 @@ export default function App() {
   const panelProps = { web3, me, refresh, refreshKey, setTab };
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="brand">
-          <div className="brand-mark">ID</div>
-          <div>
-            <h1>Decentralized Identity &amp; Asset Control</h1>
-            <p>Digital IDs · who owns what · who can see what · a history nobody can rewrite</p>
-          </div>
-        </div>
-
-        <div className="wallet">
-          {chainId && <Badge tone="accent">{CHAIN_NAMES[chainId] ?? `network ${chainId}`}</Badge>}
-
-          {isLocalChain && (
-            <label className="row" style={{ gap: 6 }}>
-              <span style={{ color: "var(--muted)", fontSize: 13 }}>Try as</span>
-              <select
-                className="input"
-                style={{ width: "auto", padding: "6px 8px" }}
-                value={devIndex}
-                onChange={(e) => useDevAccount(Number(e.target.value))}
-                title="Demo accounts for the local test network — no wallet needed"
-              >
-                <option value={-1}>choose a person…</option>
-                {DEV_ACCOUNTS.map((a, i) => (
-                  <option key={i} value={i}>{a.label}</option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {account ? (
-            <div className="who">
-              <Badge tone={me?.verified ? "ok" : "warn"}>{me?.verified ? "ID active" : "no ID yet"}</Badge>
-              {me?.roles.map((r) => <RoleChip key={r} role={r} />)}
-              <Addr value={account} />
+    <NamesProvider contracts={contracts} refreshKey={refreshKey}>
+      <div className="app">
+        <header className="header">
+          <div className="brand">
+            <div className="brand-mark">ID</div>
+            <div>
+              <h1>Decentralized Identity &amp; Asset Control</h1>
+              <p>Digital IDs · approved onboarding · who owns what · who can see what · a history nobody can rewrite</p>
             </div>
-          ) : (
-            <Button onClick={connect}>{hasWallet ? "Sign in with wallet" : "Browse (read-only)"}</Button>
-          )}
-        </div>
-      </header>
-
-      {error && <Notice tone="err">{error}</Notice>}
-      {chainId && !deployment && (
-        <Notice tone="warn">
-          The app isn't set up on this network yet. Run <code>npm run deploy:local</code>, or switch your wallet to a
-          network listed in <code>frontend/src/deployments.json</code>.
-        </Notice>
-      )}
-      {!account && contracts && (
-        <Notice tone="info">
-          You're browsing. To take an action, {isLocalChain ? "pick a person from “Try as” above" : "sign in with a wallet"}.
-        </Notice>
-      )}
-
-      <nav className="tabs">
-        {TABS.map(([key, label], i) => (
-          <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-            <span className="num">{i === 0 ? "★" : i}</span>
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      <main>
-        {contracts ? <Panel {...panelProps} /> : <div className="empty">Waiting for a network with the app deployed…</div>}
-      </main>
-
-      <footer>
-        Every rule you see enforced here is enforced by the smart contracts themselves — this screen only shows what the chain allows.
-        {deployment && (
-          <div>
-            Contracts:{" "}
-            {Object.entries(deployment.contracts).map(([n, a]) => (
-              <span key={n}> {n} <Addr value={a} /> </span>
-            ))}
           </div>
+
+          <div className="wallet">
+            {chainId && <Badge tone="accent">{CHAIN_NAMES[chainId] ?? `network ${chainId}`}</Badge>}
+
+            {isLocalChain && (
+              <label className="row" style={{ gap: 6 }}>
+                <span style={{ color: "var(--muted)", fontSize: 13 }}>Try as</span>
+                <select
+                  className="input"
+                  style={{ width: "auto", padding: "6px 8px" }}
+                  value={devIndex}
+                  onChange={(e) => useDevAccount(Number(e.target.value))}
+                  title="Demo accounts for the local test network — no wallet needed"
+                >
+                  <option value={-1}>choose a person…</option>
+                  {DEV_ACCOUNTS.map((a, i) => (
+                    <option key={i} value={i}>{a.label}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {account ? (
+              <div className="who">
+                <Badge tone={me?.verified ? "ok" : "warn"}>{me?.verified ? "ID active" : "no ID yet"}</Badge>
+                {me?.roles.map((r) => <RoleChip key={r} role={r} />)}
+                <Addr value={account} />
+              </div>
+            ) : (
+              <Button onClick={connect}>{hasWallet ? "Sign in with wallet" : "Browse (read-only)"}</Button>
+            )}
+          </div>
+        </header>
+
+        {error && <Notice tone="err">{error}</Notice>}
+        {chainId && !deployment && (
+          <Notice tone="warn">
+            The app isn't set up on this network yet. Run <code>npm run deploy:local</code>, or switch your wallet to a
+            network listed in <code>frontend/src/deployments.json</code>.
+          </Notice>
         )}
-      </footer>
-    </div>
+        {deployment && !deployment.contracts.Onboarding && (
+          <Notice tone="warn">
+            This deployment predates the onboarding workflow. Redeploy with <code>npm run deploy:local</code> and <code>npm run seed:local</code>.
+          </Notice>
+        )}
+        {!account && contracts && (
+          <Notice tone="info">
+            You're browsing. To take an action, {isLocalChain ? "pick a person from “Try as” above" : "sign in with a wallet"}.
+          </Notice>
+        )}
+
+        <nav className="tabs">
+          {TABS.map(([key, label], i) => (
+            <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
+              <span className="num">{i === 0 ? "★" : i}</span>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <main>
+          {contracts ? <Panel {...panelProps} /> : <div className="empty">Waiting for a network with the app deployed…</div>}
+        </main>
+
+        <footer>
+          Every rule you see enforced here is enforced by the smart contracts themselves — this screen only shows what the chain allows.
+          {deployment && (
+            <div>
+              Contracts:{" "}
+              {Object.entries(deployment.contracts).map(([n, a]) => (
+                <span key={n}> {n} <span className="mono" title={a}>{a.slice(0, 8)}…</span> </span>
+              ))}
+            </div>
+          )}
+        </footer>
+      </div>
+    </NamesProvider>
   );
 }
