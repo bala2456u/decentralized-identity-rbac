@@ -7,8 +7,12 @@ import AuditTrail from "../abi/AuditTrail.json";
 import AssetNFT from "../abi/AssetNFT.json";
 import AccessPolicy from "../abi/AccessPolicy.json";
 import Onboarding from "../abi/Onboarding.json";
+import DocumentStore from "../abi/DocumentStore.json";
 
-export const ABIS = { DIDRegistry, RoleManager, AuditTrail, AssetNFT, AccessPolicy, Onboarding };
+export const ABIS = { DIDRegistry, RoleManager, AuditTrail, AssetNFT, AccessPolicy, Onboarding, DocumentStore };
+
+/** Chain ids that have a deployment in deployments.json. */
+export const deployedChainIds = () => Object.keys(deployments).map(Number);
 
 // ---------------------------------------------------------------------------
 // Roles
@@ -111,6 +115,7 @@ export function makeContracts(runner, deployment) {
     nft: new Contract(c.AssetNFT, AssetNFT, runner),
     policy: new Contract(c.AccessPolicy, AccessPolicy, runner),
     onboarding: c.Onboarding ? new Contract(c.Onboarding, Onboarding, runner) : null,
+    docs: c.DocumentStore ? new Contract(c.DocumentStore, DocumentStore, runner) : null,
   };
 }
 
@@ -189,6 +194,8 @@ const FRIENDLY = {
   NotAuthorizedToReject: () => "Only the department head (at stage one) or an admin can reject this request.",
   NotHOD: ([a]) => `${short(a)} doesn't hold the Head of Department role, so they can't head a department.`,
   NotOnboarding: () => "Only the Onboarding contract can grant the User role this way.",
+  DocumentTooLarge: ([size, max]) =>
+    `That document is ${Math.round(Number(size) / 1024)} KB; the ledger accepts up to ${Number(max) / 1024} KB. Keep it off-chain and give a link instead.`,
 };
 
 function findRevertData(err) {

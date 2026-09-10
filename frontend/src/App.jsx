@@ -1,6 +1,7 @@
-import { useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { useWeb3, DEV_ACCOUNTS } from "./lib/useWeb3";
 import { CHAIN_NAMES, ROLES } from "./lib/contracts";
+import { parseVerifyHash, verifyHash } from "./lib/docs";
 import { NamesProvider } from "./lib/names";
 import { Addr, Badge, Button, Notice, RoleChip } from "./lib/ui";
 
@@ -11,6 +12,7 @@ import RolesPanel from "./panels/RolesPanel";
 import AssetsPanel from "./panels/AssetsPanel";
 import AccessPanel from "./panels/AccessPanel";
 import AuditPanel from "./panels/AuditPanel";
+import VerifyPanel from "./panels/VerifyPanel";
 
 const TABS = [
   ["home", "Start here"],
@@ -20,6 +22,7 @@ const TABS = [
   ["assets", "Assets"],
   ["access", "Sharing"],
   ["audit", "History"],
+  ["verify", "Verify"],
 ];
 
 const PANELS = {
@@ -30,15 +33,37 @@ const PANELS = {
   assets: AssetsPanel,
   access: AccessPanel,
   audit: AuditPanel,
+  verify: VerifyPanel,
 };
 
 export default function App() {
   const web3 = useWeb3();
   const { account, chainId, deployment, contracts, connect, hasWallet, error, useDevAccount, devIndex, isLocalChain } = web3;
 
-  const [tab, setTab] = useState("home");
+  const [verifyTarget, setVerifyTarget] = useState(() => parseVerifyHash());
+  const [tab, setTab] = useState(() => (parseVerifyHash() ? "verify" : "home"));
   const [refreshKey, refresh] = useReducer((x) => x + 1, 0);
   const [me, setMe] = useState(null);
+
+  // Shareable links: <site>/#verify=asset:1 opens the Verify tab on that record.
+  useEffect(() => {
+    const onHash = () => {
+      const t = parseVerifyHash();
+      if (t) {
+        setVerifyTarget(t);
+        setTab("verify");
+      }
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const openVerify = useCallback((kind, id) => {
+    const target = { kind, id: String(id) };
+    window.history.replaceState(null, "", verifyHash(kind, target.id));
+    setVerifyTarget(target);
+    setTab("verify");
+  }, []);
 
   // Who am I, according to the chain?
   useEffect(() => {
@@ -70,7 +95,7 @@ export default function App() {
   }, [contracts, account, refreshKey]);
 
   const Panel = PANELS[tab];
-  const panelProps = { web3, me, refresh, refreshKey, setTab };
+  const panelProps = { web3, me, refresh, refreshKey, setTab, openVerify, verifyTarget };
 
   return (
     <NamesProvider contracts={contracts} refreshKey={refreshKey}>
@@ -80,7 +105,7 @@ export default function App() {
             <div className="brand-mark">ID</div>
             <div>
               <h1>Decentralized Identity &amp; Asset Control</h1>
-              <p>Digital IDs · approved onboarding · who owns what · who can see what · a history nobody can rewrite</p>
+              <p>Digital IDs · approved onboarding · who owns what · who can see what · documents that verify themselves</p>
             </div>
           </div>
 
@@ -124,21 +149,22 @@ export default function App() {
             network listed in <code>frontend/src/deployments.json</code>.
           </Notice>
         )}
-        {deployment && !deployment.contracts.Onboarding && (
+        {deployment && !deployment.contracts.DocumentStore && (
           <Notice tone="warn">
-            This deployment predates the onboarding workflow. Redeploy with <code>npm run deploy:local</code> and <code>npm run seed:local</code>.
+            This deployment predates the document store. Redeploy with <code>npm run deploy:local</code> and <code>npm run seed:local</code>.
           </Notice>
         )}
-        {!account && contracts && (
+        {!account && contracts && tab !== "verify" && (
           <Notice tone="info">
             You're browsing. To take an action, {isLocalChain ? "pick a person from “Try as” above" : "sign in with a wallet"}.
+            The <b>Verify</b> tab works without signing in.
           </Notice>
         )}
 
         <nav className="tabs">
           {TABS.map(([key, label], i) => (
             <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-              <span className="num">{i === 0 ? "★" : i}</span>
+              <span className="num">{i === 0 ? "★" : key === "verify" ? "✓" : i}</span>
               {label}
             </button>
           ))}

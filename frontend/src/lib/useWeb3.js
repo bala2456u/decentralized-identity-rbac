@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserProvider, JsonRpcProvider, Wallet } from "ethers";
-import { getDeployment, makeContracts } from "./contracts";
+import { deployedChainIds, getDeployment, makeContracts } from "./contracts";
 
 const LOCAL_RPC = "http://127.0.0.1:8545";
 const LOCAL_CHAIN_ID = 31337;
+
+/**
+ * Public, key-less RPC endpoints used when there is no wallet, so that
+ * read-only pages (Verify, History) work for anyone who opens a link.
+ */
+const READ_ONLY_RPCS = {
+  [LOCAL_CHAIN_ID]: LOCAL_RPC,
+  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
+  80002: "https://rpc-amoy.polygon.technology",
+};
 
 /**
  * Hardhat's default test accounts — PUBLIC, documented keys that `npx hardhat node`
@@ -24,7 +34,8 @@ export const DEV_ACCOUNTS = [
 
 /**
  * Wallet + provider state. Prefers an injected wallet (MetaMask etc.); falls
- * back to a read-only connection to a local Hardhat node when none is present.
+ * back to a read-only connection — the local Hardhat node first, then any
+ * public network that has a deployment.
  */
 export function useWeb3() {
   const [provider, setProvider] = useState(null);
@@ -36,12 +47,32 @@ export function useWeb3() {
 
   const hasWallet = typeof window !== "undefined" && Boolean(window.ethereum);
 
+  const useReadOnly = useCallback(async () => {
+    const candidates = [LOCAL_CHAIN_ID, ...deployedChainIds().filter((c) => c !== LOCAL_CHAIN_ID)];
+    for (const cid of candidates) {
+      const url = READ_ONLY_RPCS[cid];
+      if (!url) continue;
+      const p = new JsonRpcProvider(url, cid, { staticNetwork: true });
+      try {
+        await p.getBlockNumber();
+        setProvider(p);
+        setChainId(cid);
+        setSigner(null);
+        setAccount(null);
+        setError(null);
+        return;
+      } catch {
+        p.destroy?.();
+      }
+    }
+    setError(`No wallet detected and no reachable network (tried the local node at ${LOCAL_RPC}).`);
+  }, []);
+
   /** Act as one of the local demo accounts (index -1 = back to read-only). Local chain only. */
   const useDevAccount = useCallback(async (index) => {
-    const p = new JsonRpcProvider(LOCAL_RPC);
+    const p = new JsonRpcProvider(LOCAL_RPC, LOCAL_CHAIN_ID, { staticNetwork: true });
     try {
-      const net = await p.getNetwork();
-      if (Number(net.chainId) !== LOCAL_CHAIN_ID) throw new Error("Demo accounts only work on the local Hardhat chain.");
+      await p.getBlockNumber();
       setProvider(p);
       setChainId(LOCAL_CHAIN_ID);
       if (index < 0) {
@@ -56,20 +87,7 @@ export function useWeb3() {
       setDevIndex(index);
       setError(null);
     } catch (e) {
-      setError(e?.shortMessage || e?.message || String(e));
-    }
-  }, []);
-
-  const useReadOnly = useCallback(async () => {
-    const p = new JsonRpcProvider(LOCAL_RPC);
-    try {
-      const net = await p.getNetwork();
-      setProvider(p);
-      setChainId(Number(net.chainId));
-      setSigner(null);
-      setAccount(null);
-    } catch {
-      setError(`No wallet detected and no local node reachable at ${LOCAL_RPC}.`);
+      setError("Demo accounts need the local Hardhat node running at " + LOCAL_RPC + ".");
     }
   }, []);
 
@@ -84,6 +102,7 @@ export function useWeb3() {
       setSigner(s);
       setAccount(await s.getAddress());
       setChainId(Number(net.chainId));
+      setDevIndex(-1);
       setError(null);
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e));
@@ -106,7 +125,7 @@ export function useWeb3() {
         setProvider(p);
         setChainId(Number(net.chainId));
       })
-      .catch(() => {});
+      .catch(() => useReadOnly());
 
     const onAccounts = (accounts) => (accounts.length ? connect() : window.location.reload());
     const onChain = () => window.location.reload();

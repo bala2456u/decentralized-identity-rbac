@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { isAddress } from "ethers";
 import { describeError, fmtTime, hashText, ROLES, toUnix } from "../lib/contracts";
+import { hashDoc, storeDoc } from "../lib/docs";
+import DocLink from "../components/DocLink";
+import StorageChoice from "../components/StorageChoice";
 import { Addr, Badge, Button, Card, Empty, Explain, Field, Input, KV, Notice, RoleChip, Table, useTx } from "../lib/ui";
 
 export default function IdentityPanel(props) {
@@ -13,10 +16,17 @@ export default function IdentityPanel(props) {
   );
 }
 
-function MyIdentity({ web3, refresh, refreshKey }) {
+/** Where a document ends up: on the ledger (link is derived) or wherever the user says. */
+async function placeDocument(contracts, where, text, link) {
+  if (where === "ledger") return storeDoc(contracts, text);
+  return { link, hash: hashDoc(text) };
+}
+
+function MyIdentity({ web3, refresh, refreshKey, openVerify }) {
   const { contracts, account } = web3;
   const [identity, setIdentity] = useState(null);
   const [did, setDid] = useState("");
+  const [where, setWhere] = useState("ledger");
   const [docURI, setDocURI] = useState("ipfs://");
   const [docText, setDocText] = useState("");
   const [newController, setNewController] = useState("");
@@ -37,6 +47,8 @@ function MyIdentity({ web3, refresh, refreshKey }) {
     );
   }
 
+  const canSubmit = docText && (where === "ledger" || docURI);
+
   if (!identity || !identity.exists) {
     return (
       <Card
@@ -46,20 +58,27 @@ function MyIdentity({ web3, refresh, refreshKey }) {
       >
         <Explain>
           Your Digital ID is derived from your account's address, so it's unique and can't be faked. The details about you
-          (name, department, public key…) live in a document you keep elsewhere; only its <b>fingerprint</b> is stored on
-          the chain. That proves the document hasn't changed without ever exposing what's in it.
+          (name, department, public key…) live in a small document. Its <b>fingerprint</b> is always recorded on the
+          chain; you choose whether the document itself is stored on the ledger too, so anyone can open and verify it.
         </Explain>
-        <Field label="Link to your ID document" hint="Where the full document is stored — an IPFS link, for example. Keep personal details off the chain.">
-          <Input value={docURI} onChange={(e) => setDocURI(e.target.value)} />
+        <Field label="ID document" hint={docText ? `Fingerprint that will be recorded: ${hashDoc(docText)}` : "Keep it to public facts: name, department, role, public key."}>
+          <textarea className="input mono" rows={4} value={docText} onChange={(e) => setDocText(e.target.value)}
+            placeholder={'{\n  "name": "Dave Kumar",\n  "department": "Procurement",\n  "role": "Buyer"\n}'} />
         </Field>
-        <Field
-          label="ID document content"
-          hint={docText ? `Fingerprint that will be recorded: ${hashText(docText)}` : "Only a fingerprint of this text is recorded — never the text itself."}
-        >
-          <Input value={docText} onChange={(e) => setDocText(e.target.value)} placeholder='e.g. {"name":"Dave Kumar","department":"Procurement"}' />
+        <Field label="Where should the document live?">
+          <StorageChoice value={where} onChange={setWhere} what="ID document" />
         </Field>
+        {where === "link" && (
+          <Field label="Link to the document" hint="An IPFS link, or any URL where the exact same text is kept.">
+            <Input value={docURI} onChange={(e) => setDocURI(e.target.value)} />
+          </Field>
+        )}
         <div className="actions">
-          <Button busy={tx.busy} disabled={!docText} onClick={() => tx.run("Create Digital ID", () => contracts.did.register(docURI, hashText(docText)))}>
+          <Button busy={tx.busy} disabled={!canSubmit}
+            onClick={() => tx.run(where === "ledger" ? "Store document and create Digital ID" : "Create Digital ID", async () => {
+              const { link, hash } = await placeDocument(contracts, where, docText, docURI);
+              return contracts.did.register(link, hash);
+            })}>
             Create my Digital ID
           </Button>
         </div>
@@ -80,7 +99,7 @@ function MyIdentity({ web3, refresh, refreshKey }) {
           ["Controlled by", <Addr value={identity.controller} full />],
           ["Created", fmtTime(identity.createdAt)],
           ["Last changed", fmtTime(identity.updatedAt)],
-          ["Document link", <code>{identity.docURI}</code>],
+          ["Document", <DocLink uri={identity.docURI} expectedHash={identity.docHash} contracts={contracts} />],
           ["Document fingerprint", <code>{identity.docHash}</code>],
         ]}
       />
@@ -94,8 +113,9 @@ function MyIdentity({ web3, refresh, refreshKey }) {
             Reactivate my ID
           </Button>
         )}
+        <Button size="sm" variant="ghost" onClick={() => openVerify("identity", account)}>Verify page &amp; QR →</Button>
         <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
-          While suspended, all your roles, assets and shares stop working. Reactivating brings them back.
+          While suspended, all your roles, assets and shares stop working.
         </span>
       </div>
 
@@ -110,22 +130,30 @@ function MyIdentity({ web3, refresh, refreshKey }) {
           </Button>
         </div>
       </Field>
-      <Field label="Update my ID document">
-        <div className="row">
-          <Input placeholder="new document link" value={docURI} onChange={(e) => setDocURI(e.target.value)} />
-          <Input placeholder="new document content" value={docText} onChange={(e) => setDocText(e.target.value)} />
-          <Button size="sm" variant="ghost" busy={tx.busy} disabled={!docText}
-            onClick={() => tx.run("Update document", () => contracts.did.updateDocument(account, hashText(docText), docURI))}>
-            Update
-          </Button>
-        </div>
+      <Field label="Update my ID document" hint={docText ? `New fingerprint: ${hashDoc(docText)}` : "Replace the document; the old fingerprint stays in the history."}>
+        <textarea className="input mono" rows={3} value={docText} onChange={(e) => setDocText(e.target.value)} placeholder="new document content" />
       </Field>
+      <StorageChoice value={where} onChange={setWhere} what="ID document" />
+      {where === "link" && (
+        <Field label="Link to the document" style={{ marginTop: 8 }}>
+          <Input placeholder="ipfs://… or https://…" value={docURI} onChange={(e) => setDocURI(e.target.value)} />
+        </Field>
+      )}
+      <div className="actions">
+        <Button size="sm" variant="ghost" busy={tx.busy} disabled={!canSubmit}
+          onClick={() => tx.run("Update document", async () => {
+            const { link, hash } = await placeDocument(contracts, where, docText, docURI);
+            return contracts.did.updateDocument(account, hash, link);
+          })}>
+          Update document
+        </Button>
+      </div>
       <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
     </Card>
   );
 }
 
-function Lookup({ web3, me, refresh, refreshKey }) {
+function Lookup({ web3, me, refresh, refreshKey, openVerify }) {
   const { contracts } = web3;
   const [addr, setAddr] = useState("");
   const [result, setResult] = useState(null);
@@ -177,12 +205,13 @@ function Lookup({ web3, me, refresh, refreshKey }) {
               ["Roles", result.held.length ? result.held.map((r) => <RoleChip key={r} role={r} />) : <span className="empty">none</span>],
               ["Controlled by", <Addr value={result.identity.controller} full />],
               ["Created", fmtTime(result.identity.createdAt)],
-              ["Document link", <code>{result.identity.docURI}</code>],
+              ["Document", <DocLink uri={result.identity.docURI} expectedHash={result.identity.docHash} contracts={contracts} />],
             ]}
           />
-          {me?.isAdmin && (
-            <div className="actions">
-              {result.identity.active ? (
+          <div className="actions">
+            <Button size="sm" variant="ghost" onClick={() => openVerify("identity", addr)}>Verify page &amp; QR →</Button>
+            {me?.isAdmin && (
+              result.identity.active ? (
                 <Button size="sm" variant="danger" busy={tx.busy} onClick={() => tx.run("Suspend this ID", () => contracts.did.deactivate(addr))}>
                   Suspend this ID
                 </Button>
@@ -190,12 +219,14 @@ function Lookup({ web3, me, refresh, refreshKey }) {
                 <Button size="sm" busy={tx.busy} onClick={() => tx.run("Reactivate this ID", () => contracts.did.reactivate(addr))}>
                   Reactivate this ID
                 </Button>
-              )}
+              )
+            )}
+            {me?.isAdmin && (
               <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                Admin action. Suspending stops all their roles, assets and shares at once; only an admin can lift an admin suspension.
+                Admin action. Suspending stops all their roles, assets and shares at once.
               </span>
-            </div>
-          )}
+            )}
+          </div>
           <Notice tone={tx.tone} detail={tx.detail}>{tx.msg}</Notice>
         </div>
       )}
@@ -203,7 +234,7 @@ function Lookup({ web3, me, refresh, refreshKey }) {
   );
 }
 
-function Certificates({ web3, me, refresh, refreshKey }) {
+function Certificates({ web3, me, refresh, refreshKey, openVerify }) {
   const { contracts, account } = web3;
   const [mine, setMine] = useState([]);
   const [form, setForm] = useState({ subject: "", schema: "", claim: "", expiry: "" });
@@ -251,9 +282,12 @@ function Certificates({ web3, me, refresh, refreshKey }) {
               fmtTime(cred.issuedAt),
               cred.expiresAt > 0n ? fmtTime(cred.expiresAt) : "no expiry",
               <Badge tone={valid ? "ok" : "err"}>{valid ? "valid" : cred.revoked ? "revoked" : "not valid"}</Badge>,
-              (me?.isAdmin || cred.issuer.toLowerCase() === account?.toLowerCase()) && !cred.revoked ? (
-                <Button size="sm" variant="danger" busy={tx.busy} onClick={() => tx.run("Revoke certificate", () => contracts.did.revokeCredential(id))}>revoke</Button>
-              ) : null,
+              <span className="row">
+                <Button size="sm" variant="ghost" onClick={() => openVerify("certificate", id)}>QR</Button>
+                {(me?.isAdmin || cred.issuer.toLowerCase() === account?.toLowerCase()) && !cred.revoked && (
+                  <Button size="sm" variant="danger" busy={tx.busy} onClick={() => tx.run("Revoke certificate", () => contracts.did.revokeCredential(id))}>revoke</Button>
+                )}
+              </span>,
             ])}
           />
 

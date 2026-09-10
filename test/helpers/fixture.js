@@ -80,6 +80,7 @@ async function deploySystem() {
     await did.getAddress(),
     await roles.getAddress()
   );
+  const docs = await (await ethers.getContractFactory("DocumentStore")).deploy();
 
   // Wiring
   await did.setRoleManager(await roles.getAddress());
@@ -103,7 +104,7 @@ async function deploySystem() {
   await roles.grantRole(ROLES.HOD, hod.address);
   await onboarding.setDepartmentHead("Procurement", hod.address);
 
-  return { did, roles, audit, nft, policy, onboarding, admin, issuer, auditor, alice, bob, carol, mallory, hod, dave };
+  return { did, roles, audit, nft, policy, onboarding, docs, admin, issuer, auditor, alice, bob, carol, mallory, hod, dave };
 }
 
 /** Mint one asset to `to` from the issuer; returns the tokenId. */

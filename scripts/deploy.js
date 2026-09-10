@@ -15,7 +15,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { ethers, network, artifacts } = require("hardhat");
 
-const CONTRACTS = ["DIDRegistry", "RoleManager", "AuditTrail", "AssetNFT", "AccessPolicy", "Onboarding"];
+const CONTRACTS = ["DIDRegistry", "RoleManager", "AuditTrail", "AssetNFT", "AccessPolicy", "Onboarding", "DocumentStore"];
 
 async function send(label, promise) {
   const tx = await promise;
@@ -71,7 +71,11 @@ async function main() {
     await roles.getAddress()
   );
   await onboarding.waitForDeployment();
-  console.log(`  Onboarding    ${await onboarding.getAddress()}\n`);
+  console.log(`  Onboarding    ${await onboarding.getAddress()}`);
+
+  const docs = await (await ethers.getContractFactory("DocumentStore")).deploy();
+  await docs.waitForDeployment();
+  console.log(`  DocumentStore ${await docs.getAddress()}\n`);
 
   console.log("Wiring…");
   await send("DIDRegistry.setRoleManager", did.setRoleManager(await roles.getAddress()));
@@ -95,6 +99,7 @@ async function main() {
       AssetNFT: await nft.getAddress(),
       AccessPolicy: await policy.getAddress(),
       Onboarding: await onboarding.getAddress(),
+      DocumentStore: await docs.getAddress(),
     },
   };
 

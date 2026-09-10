@@ -3,13 +3,13 @@
 [![CI](https://github.com/bala2456u/decentralized-identity-rbac/actions/workflows/ci.yml/badge.svg)](https://github.com/bala2456u/decentralized-identity-rbac/actions/workflows/ci.yml)
 ![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636?logo=solidity)
 ![OpenZeppelin 5](https://img.shields.io/badge/OpenZeppelin-5.x-4E5EE4)
-![Tests 96](https://img.shields.io/badge/tests-96%20passing-34d399)
+![Tests 101](https://img.shields.io/badge/tests-101%20passing-34d399)
 ![License MIT](https://img.shields.io/badge/license-MIT-blue)
 
 > **Challenge 21** — a decentralized system for managing user identities, digital-asset ownership and access
 > permissions, where every record is verifiable, resistant to unauthorised modification, and fully auditable.
 
-Six smart contracts, one rule: **no identity, no rights.** Every role, every asset transfer and every permission in
+Seven smart contracts, one rule: **no identity, no rights.** Every role, every asset transfer and every permission in
 this system is bound to a self-sovereign decentralized identifier (DID). Suspend the identity and everything attached
 to it — roles, the ability to move assets, the permissions it was granted — stops working in the same block.
 Every one of those events lands in a hash-chained, append-only audit log that anyone can verify.
@@ -18,6 +18,11 @@ Getting *into* the organisation is itself enforced by contract: a new person sub
 department, their **Head of Department** approves, then an **Admin** approves — in that order, with no self-approval —
 and only then does the contract grant them the right to hold assets. Every identity carries a human-readable
 reference (`Dave Kumar · STAFF-1042`), so the dApp never shows a raw hash where a person belongs.
+
+Documents can **live on the ledger itself**: an ID document, a certificate or a published contract is stored under
+its own fingerprint (`ledger://<hash>`), so the link can never go dead or be swapped, and a public **Verify** page —
+reachable by QR code, no account needed — lets an employer, auditor or other department confirm any person, asset
+or certificate and check that a copy they were handed matches what was recorded.
 
 ---
 
@@ -32,7 +37,7 @@ reference (`Dave Kumar · STAFF-1042`), so the dApp never shows a raw hash where
 | 5 | Smart contracts enforce the rules | Every rule is enforced in Solidity, not the UI. Mint, transfer, burn all funnel through one `_update` choke point; permission changes through one `_grant`; onboarding is a state machine (`PendingHOD → PendingAdmin → Approved`) whose stages cannot be skipped, reordered or self-approved. The React app only reflects what the chain allows. | all contracts, [`Onboarding.sol`](contracts/Onboarding.sol) |
 | 6 | Identity, ownership and access activity recorded on-chain | Indexed events on every state change **plus** a dedicated `AuditTrail` contract that only system contracts can write to. | [`AuditTrail.sol`](contracts/AuditTrail.sol) |
 | 7 | Prevent unauthorised creation, transfer, permission change | 40+ negative tests prove it: unauthorised minting, transfers to unregistered accounts, self-promotion to admin, signature replay, grants by non-owners — all revert with named custom errors. | [`test/`](test) |
-| 8 | Transparent verification and audit | The audit log is a hash chain (`verifyChain` recomputes it and reports the first broken entry). Per-asset provenance, per-address history, credential verification and effective-permission checks are all public `view` functions surfaced in the dApp's **Audit** tab. | `AuditTrail.verifyChain`, [`frontend/`](frontend) |
+| 8 | Transparent verification and audit | The audit log is a hash chain (`verifyChain` recomputes it and reports the first broken entry). Per-asset provenance, per-address history, credential verification and effective-permission checks are all public `view` functions surfaced in the dApp's **History** tab. A public **Verify** tab (with QR codes and shareable `#verify=` links) checks any person, asset or certificate and fingerprints a pasted document against the record. | `AuditTrail.verifyChain`, [`DocumentStore.sol`](contracts/DocumentStore.sol), [`frontend/`](frontend) |
 
 ---
 
@@ -53,7 +58,11 @@ flowchart LR
     subgraph Onboarding
         ONB["Onboarding<br/>Staff ID · HOD → Admin approval"]
     end
+    DS[("DocumentStore<br/>ledger://&lt;hash&gt; documents")]
     AT[("AuditTrail<br/>hash-chained log")]
+
+    DID -. docURI .-> DS
+    NFT -. tokenURI .-> DS
 
     RM -- isVerified --> DID
     DID -- hasValidRole --> RM
@@ -79,6 +88,7 @@ flowchart LR
 | **AssetNFT** | Assets as ERC-721 | Issuer-only mint · content-hash uniqueness · recipient must be DID+USER · sender must be active · admin freeze · provenance kept even after burn |
 | **AccessPolicy** | Who may VIEW / EDIT / MANAGE an asset | Owner implicitly MANAGE · MANAGE may delegate below itself · time-boxed grants · **all grants lapse automatically when the asset changes hands** · gasless EIP-712 grants with nonce + deadline |
 | **Onboarding** | Approved entry into the organisation, and readable references | Applicant needs an active DID · `submit → approveByHOD → approveByAdmin` enforced as a state machine · first approver must be the registered head of *that* department · no self-approval · Staff IDs are unique · rejection with an on-record reason, resubmission allowed · final approval makes the contract grant `USER_ROLE` (the only role any contract can grant) |
+| **DocumentStore** | Documents that verify themselves | Content-addressed: stored under `keccak256(content)`, so `ledger://<hash>` *is* the fingerprint · idempotent (re-storing identical bytes is a no-op, first storer stays on record) · 24 KB cap — large or private files stay off-chain, fingerprint-only |
 | **AuditTrail** | Tamper-evident history | Append-only · writer allow-list (not even the admin can write directly) · each entry commits to the previous hash · `verifyChain(from,to)` |
 
 ---
@@ -96,6 +106,7 @@ flowchart LR
 | Stale permissions after a sale | Every grant records the owner at the time; a change of owner invalidates it with no extra transaction. |
 | Signature replay | Both signed flows (credentials, gasless grants) use a per-signer nonce and the EIP-712 domain (chain id + contract address). Grants also carry a deadline. |
 | Audit tampering | The log is a hash chain with no update/delete path. Only allow-listed contracts can append. |
+| Forged or edited documents; links that go dead or get swapped | Every record carries a fingerprint; the Verify page re-hashes any pasted copy in the browser and compares. Documents stored on the ledger are addressed by their own hash, so what you fetch is provably what was registered. |
 | Personal data leakage | Nothing personal goes on-chain: DID documents, credential evidence and asset files are referenced by hash / URI only. |
 
 **Known limitations** (deliberate scope decisions for a hackathon build): no social/multisig recovery of assets held by a lost key — an admin can suspend the identity but not move the asset; `DIDRegistry.admin` and `AuditTrail.admin` are single keys and would be a multisig in production; the identity method `did:yhack` is custom rather than a registered DID method.
@@ -113,7 +124,7 @@ npm install
 npm test
 ```
 
-You should see **96 passing**. Roughly half of those tests are attacks that must fail.
+You should see **101 passing**. Roughly half of those tests are attacks that must fail.
 
 ### Run the full stack locally
 
@@ -185,6 +196,10 @@ plain-English reason with the exact contract error underneath:
    authorised by alice. Submit it again → *"already used"*.
 6. **History** — every step above is there with who did it, who it was about and a reference. Click *Verify the whole
    log*. The refused attempts are absent — they never happened.
+7. **Documents that verify themselves** — **Assets → Find** #1: its file is `ledger://…` — click *Open & verify*: the
+   contract text comes back from the chain with *"✔ matches the fingerprint on record"*. Click *Verify page & QR →*:
+   a public page with a QR code. Paste the contract text into *Been handed a copy?* → *"✔ Genuine"*. Change one
+   character → *"✘ Does not match"*. Open the link in a private window: it works with no account at all.
 
 ---
 
@@ -197,15 +212,16 @@ contracts/
   AssetNFT.sol          ERC-721 assets with provenance
   AccessPolicy.sol      per-asset permissions
   Onboarding.sol        Staff IDs + HOD → Admin approval workflow
+  DocumentStore.sol     content-addressed documents (ledger://<hash>)
   AuditTrail.sol        hash-chained log
   interfaces/           minimal cross-contract surfaces
   libraries/            AuditActions constants
-test/                   96 tests, one file per contract + shared fixture
+test/                   101 tests, one file per contract + shared fixture
 scripts/
   deploy.js             deploy + wire + export to frontend
   seed.js               demo data for a local node
   export-abi.js         copies ABIs into frontend/src/abi
-frontend/               React + Vite + ethers v6 dApp (Start here · My Digital ID · Onboarding · Roles · Assets · Sharing · History)
+frontend/               React + Vite + ethers v6 dApp (Start here · My Digital ID · Onboarding · Roles · Assets · Sharing · History · Verify)
 deployments/            one JSON per network with contract addresses
 .github/workflows/      CI: compile, test, build frontend
 ```

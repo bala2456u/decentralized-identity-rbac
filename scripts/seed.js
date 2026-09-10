@@ -43,18 +43,37 @@ async function main() {
   const policy = await ethers.getContractAt("AccessPolicy", contracts.AccessPolicy);
   const audit = await ethers.getContractAt("AuditTrail", contracts.AuditTrail);
   const onboarding = await ethers.getContractAt("Onboarding", contracts.Onboarding);
+  const docs = await ethers.getContractAt("DocumentStore", contracts.DocumentStore);
+
+  /** Store a text document on the ledger; returns { link, hash }. Idempotent. */
+  const storeOnLedger = async (signer, text) => {
+    const bytes = ethers.toUtf8Bytes(text);
+    const hash = ethers.keccak256(bytes);
+    if (!(await docs.exists(hash))) await (await docs.connect(signer).store(bytes)).wait();
+    return { link: `ledger://${hash}`, hash };
+  };
 
   console.log("\nIdentities");
+  // alice and bob keep their DID documents ON the ledger (public, self-verifying);
+  // the others point to an off-chain link and record only the fingerprint.
   const cast = [
-    [issuer, "issuer"], [auditor, "auditor"], [alice, "alice"], [bob, "bob"], [carol, "carol"], [hod, "hod"],
+    [issuer, "issuer", null],
+    [auditor, "auditor", null],
+    [alice, "alice", { name: "Alice Fernandes", department: "Procurement", role: "Senior Buyer", publicKey: alice.address }],
+    [bob, "bob", { name: "Bob Mehta", department: "Finance", role: "Analyst", publicKey: bob.address }],
+    [carol, "carol", null],
+    [hod, "hod", null],
   ];
-  for (const [signer, name] of cast) {
+  for (const [signer, name, doc] of cast) {
     if (await did.isVerified(signer.address)) {
       console.log(`  = ${name.padEnd(8)} already registered`);
       continue;
     }
-    await (await did.connect(signer).register(`ipfs://did-doc-${name}`, ethers.id(`did-doc:${name}`))).wait();
-    console.log(`  + ${name.padEnd(8)} ${await did.didOf(signer.address)}`);
+    let link = `ipfs://did-doc-${name}`;
+    let hash = ethers.id(`did-doc:${name}`);
+    if (doc) ({ link, hash } = await storeOnLedger(signer, JSON.stringify(doc, null, 2)));
+    await (await did.connect(signer).register(link, hash)).wait();
+    console.log(`  + ${name.padEnd(8)} ${await did.didOf(signer.address)}${doc ? "  (document on ledger)" : ""}`);
   }
 
   console.log("\nRoles");
@@ -125,14 +144,26 @@ async function main() {
   }
 
   console.log("\nAssets");
+  const contractText = [
+    "SUPPLIER CONTRACT 2026",
+    "Between: Acme Components Ltd and the Procurement Department",
+    "Owner of record: Alice Fernandes (STAFF-1001)",
+    "Term: 1 Jan 2026 – 31 Dec 2026   Value: 1,250,000",
+    "Clause 1: Delivery within 14 days of purchase order.",
+    "Clause 2: Defect rate above 0.5% triggers a penalty of 2% per batch.",
+    "Approved by: Head of Procurement · Registered by: Records Office",
+  ].join("\n");
+  // Asset #1 keeps its full text ON the ledger (public, self-verifying); the others are fingerprint-only.
   const assets = [
-    [alice, "Supplier Contract 2026", "contract", "ipfs://QmSupplierContract2026"],
-    [alice, "Product Design Spec v3", "design", "ipfs://QmProductDesignV3"],
-    [bob, "Q3 Financial Report", "report", "ipfs://QmQ3FinancialReport"],
+    [alice, "Supplier Contract 2026", "contract", null, contractText],
+    [alice, "Product Design Spec v3", "design", "ipfs://QmProductDesignV3", null],
+    [bob, "Q3 Financial Report", "report", "ipfs://QmQ3FinancialReport", null],
   ];
   const tokenIds = [];
-  for (const [owner, title, category, uri] of assets) {
-    const contentHash = ethers.id(title);
+  for (const [owner, title, category, ipfsUri, text] of assets) {
+    let uri = ipfsUri;
+    let contentHash = ethers.id(title);
+    if (text) ({ link: uri, hash: contentHash } = await storeOnLedger(issuer, text));
     let tokenId = await nft.tokenByContentHash(contentHash);
     if (tokenId === 0n) {
       const receipt = await (await nft.connect(issuer).mint(owner.address, uri, contentHash, category)).wait();

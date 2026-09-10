@@ -8,7 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { artifacts } = require("hardhat");
 
-const CONTRACTS = ["DIDRegistry", "RoleManager", "AuditTrail", "AssetNFT", "AccessPolicy", "Onboarding"];
+const CONTRACTS = ["DIDRegistry", "RoleManager", "AuditTrail", "AssetNFT", "AccessPolicy", "Onboarding", "DocumentStore"];
 
 async function exportAbis() {
   const feDir = path.join("frontend", "src");
