@@ -2,8 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserProvider, JsonRpcProvider, Wallet } from "ethers";
 import { deployedChainIds, getDeployment, makeContracts } from "./contracts";
 
-const LOCAL_RPC = "http://127.0.0.1:8545";
 const LOCAL_CHAIN_ID = 31337;
+
+/**
+ * The local Hardhat node is reached through whatever host the page itself was
+ * opened on: 127.0.0.1 on the laptop, or the laptop's Wi-Fi address when a
+ * phone opens a shared link / QR code on the same network.
+ */
+// A page served from a bare IP address (or localhost) is a dev/LAN setup: the node lives on that same host.
+const isLocalStyleHost = (h) => /^(localhost|\d{1,3}(\.\d{1,3}){3})$/.test(h);
+const LOCAL_HOST = typeof window !== "undefined" && isLocalStyleHost(window.location.hostname) ? window.location.hostname : "127.0.0.1";
+const LOCAL_RPC = `http://${LOCAL_HOST}:8545`;
 
 /**
  * Public, key-less RPC endpoints used when there is no wallet, so that

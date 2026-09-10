@@ -153,11 +153,25 @@ async function main() {
     "Clause 2: Defect rate above 0.5% triggers a penalty of 2% per batch.",
     "Approved by: Head of Procurement · Registered by: Records Office",
   ].join("\n");
-  // Asset #1 keeps its full text ON the ledger (public, self-verifying); the others are fingerprint-only.
+  const designText = [
+    "PRODUCT DESIGN SPECIFICATION v3",
+    "Product: Modular Sensor Housing MS-300",
+    "Owner of record: Alice Fernandes (STAFF-1001)",
+    "Material: glass-filled nylon · IP67 · operating range -20°C to 70°C",
+    "Revision history: v1 concept (Feb 2026), v2 tooling review (May 2026), v3 release (Aug 2026)",
+  ].join("\n");
+  const marksheetText = [
+    "STATEMENT OF MARKS — SEMESTER 5",
+    "Student: Bob Mehta (STAFF-1002) · Department: Finance",
+    "Financial Reporting: 82 · Corporate Law: 74 · Data Analysis: 91 · Ethics: 88",
+    "Result: PASS · Aggregate: 83.75%",
+    "Issued by: Records Office · Approved by: Head of Finance",
+  ].join("\n");
+  // Every seeded document lives ON the ledger (public, self-verifying), so all three open and verify.
   const assets = [
     [alice, "Supplier Contract 2026", "contract", null, contractText],
-    [alice, "Product Design Spec v3", "design", "ipfs://QmProductDesignV3", null],
-    [bob, "Q3 Financial Report", "report", "ipfs://QmQ3FinancialReport", null],
+    [alice, "Product Design Spec v3", "design", null, designText],
+    [bob, "Semester 5 Marksheet", "marksheet", null, marksheetText],
   ];
   const tokenIds = [];
   for (const [owner, title, category, ipfsUri, text] of assets) {
@@ -183,7 +197,7 @@ async function main() {
     [alice, tokenIds[0], bob, LEVEL.VIEW, 0n, "alice shares #" + tokenIds[0] + " with bob (View)"],
     [alice, tokenIds[0], carol, LEVEL.EDIT, oneWeek, "alice shares #" + tokenIds[0] + " with carol (Edit, 7 days)"],
     [alice, tokenIds[1], bob, LEVEL.MANAGE, 0n, "alice shares #" + tokenIds[1] + " with bob (Manage)"],
-    [bob, tokenIds[2], alice, LEVEL.VIEW, 0n, "bob shares #" + tokenIds[2] + " with alice (View)"],
+    [bob, tokenIds[2], hod, LEVEL.VIEW, 0n, "bob shares #" + tokenIds[2] + " with the Head of Finance (View)"],
   ];
   for (const [grantor, tokenId, grantee, level, expiresAt, label] of perms) {
     if ((await policy.effectiveLevel(tokenId, grantee.address)) >= BigInt(level)) {

@@ -150,11 +150,29 @@ testnets, where the picker does not appear.) The seed script uses the accounts i
 | 0 | admin — Priya Nair | STAFF-0001 | ✓ | ROOT, ADMIN | — |
 | 1 | issuer — Ravi Shankar | STAFF-0002 | ✓ | ISSUER | — |
 | 2 | auditor — Meera Joshi | STAFF-0003 | ✓ | AUDITOR | — (cannot hold assets: no USER_ROLE) |
-| 3 | alice — Alice Fernandes | STAFF-1001 | ✓ | USER *(via onboarding)* | assets #1, #2 · credential `EMPLOYEE_VERIFIED` |
-| 4 | bob — Bob Mehta | STAFF-1002 | ✓ | USER *(via onboarding)* | asset #3 · VIEW on #1 · MANAGE on #2 |
+| 3 | alice — Alice Fernandes | STAFF-1001 | ✓ | USER *(via onboarding)* | assets #1 (contract), #2 (design spec) · credential `EMPLOYEE_VERIFIED` |
+| 4 | bob — Bob Mehta | STAFF-1002 | ✓ | USER *(via onboarding)* | asset #3 (semester marksheet) · VIEW on #1 · MANAGE on #2 |
 | 5 | carol — Carol Iyer | STAFF-1003 | ✓ | USER *(via onboarding)* | EDIT on #1 (7 days) |
 | 6 | dave | — | ✗ | — | the newcomer for the live demo: starts with nothing |
 | 7 | hod — Arjun Rao | STAFF-0010 | ✓ | HOD, head of Procurement & Finance | — |
+
+### Show it on a phone (same Wi-Fi)
+
+`npm run node` listens on all interfaces and `npm run dev` prints a **Network:** address such as
+`http://192.168.1.23:5173`. Open the app from that address (not `localhost`) and every QR code / verify link it
+generates carries the Wi-Fi address, so any phone or laptop on the same network can scan it and land on the Verify
+page. The site finds the local chain through the same address automatically. (Windows may ask once to allow Node
+through the firewall — say yes for private networks.)
+
+### Going online (anyone, anywhere)
+
+Two halves, both free:
+
+1. **The site** — the [`pages.yml`](.github/workflows/pages.yml) workflow publishes `frontend/` to GitHub Pages on
+   every push: `https://<owner>.github.io/decentralized-identity-rbac/`.
+2. **The chain** — deploy the contracts to a public test network (below) and commit the resulting
+   `deployments/sepolia.json` + `frontend/src/deployments.json`. The published site then reads that network through a
+   public RPC, so verify links and QR codes work for anyone with no wallet, and people with a wallet can act.
 
 ### Deploy to a testnet
 
