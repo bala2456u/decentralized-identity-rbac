@@ -41,7 +41,11 @@ export default function App() {
   const { account, chainId, deployment, contracts, connect, hasWallet, error, useDevAccount, devIndex, isLocalChain } = web3;
 
   const [verifyTarget, setVerifyTarget] = useState(() => parseVerifyHash());
-  const [tab, setTab] = useState(() => (parseVerifyHash() ? "verify" : "home"));
+  const [tab, setTab] = useState(() => {
+    if (parseVerifyHash()) return "verify";
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    return PANELS[wanted] ? wanted : "home";
+  });
   const [refreshKey, refresh] = useReducer((x) => x + 1, 0);
   const [me, setMe] = useState(null);
 

@@ -124,6 +124,12 @@ export function useWeb3() {
   }, [hasWallet, useReadOnly]);
 
   useEffect(() => {
+    // Demo shortcut: ?as=<index> opens the app already acting as a demo account (local chain only).
+    const as = new URLSearchParams(window.location.search).get("as");
+    if (as !== null && DEV_ACCOUNTS[Number(as)]) {
+      useDevAccount(Number(as));
+      return undefined;
+    }
     if (!hasWallet) {
       useReadOnly();
       return undefined;
@@ -149,7 +155,7 @@ export function useWeb3() {
       window.ethereum.removeListener?.("accountsChanged", onAccounts);
       window.ethereum.removeListener?.("chainChanged", onChain);
     };
-  }, [hasWallet, connect, useReadOnly]);
+  }, [hasWallet, connect, useReadOnly, useDevAccount]);
 
   const deployment = useMemo(() => (chainId ? getDeployment(chainId) : null), [chainId]);
   const contracts = useMemo(
