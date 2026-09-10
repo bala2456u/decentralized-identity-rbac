@@ -74,7 +74,12 @@ export function useWeb3() {
         p.destroy?.();
       }
     }
-    setError(`No wallet detected and no reachable network (tried the local node at ${LOCAL_RPC}).`);
+    const onLocalStyleHost = isLocalStyleHost(window.location.hostname);
+    setError(
+      onLocalStyleHost
+        ? `No wallet detected and no reachable network (tried the local node at ${LOCAL_RPC}). Start it with "npm run node", then "npm run deploy:local" and "npm run seed:local".`
+        : "This published site isn't connected to a public test network yet. Once the contracts are deployed to Sepolia and that deployment is committed, verify links and QR codes here will work for everyone."
+    );
   }, []);
 
   /** Act as one of the local demo accounts (index -1 = back to read-only). Local chain only. */
